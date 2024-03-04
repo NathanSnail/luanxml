@@ -34,9 +34,9 @@
 ---@alias element_blob element_funcs | element
 
 ---@class (exact) element
----@field content str[]
+---@field content str[]?
 ---@field children element_blob[]
----@field attrs table<string, string>
+---@field attr table<string, string>
 ---@field name str
 ---@field errors error[]
 
@@ -341,7 +341,7 @@ local XML_ELEMENT_FUNCS = {}
 local XML_ELEMENT_MT = {
 	__index = XML_ELEMENT_FUNCS,
 	__tostring = function(self)
-		return nxml.tostring(self)
+		return nxml.tostring(self, false)
 	end,
 }
 
@@ -355,7 +355,7 @@ function PARSER_FUNCS:report_error(type, msg)
 	table.insert(self.errors, error)
 end
 
----@param attr_table any
+---@param attr_table table<str, str>
 ---@param name str
 function PARSER_FUNCS:parse_attr(attr_table, name)
 	---@cast self parser_blob
@@ -521,11 +521,9 @@ end
 ---@return str
 function XML_ELEMENT_FUNCS:text()
 	---@cast self element_blob
+	if self.content == nil then return "" end
 	local content_count = #self.content
-
-	if self.content == nil or content_count == 0 then
-		return ""
-	end
+	if content_count == 0 then return "" end
 
 	local text = self.content[1]
 	for i = 2, content_count do
@@ -603,12 +601,12 @@ function XML_ELEMENT_FUNCS:each_of(element_name)
 	local n = #self.children
 
 	return function()
-		while i <= n and self.children[i].name ~= element_name do
+		while i <= n do
 			local child = self.children[i]
+			i = i + 1
 			if child.name == element_name then
 				return child
 			end
-			i = i + 1
 		end
 	end
 end
@@ -678,12 +676,15 @@ end
 ---@param attrs table<str, str>? {}
 ---@return element_blob
 function nxml.new_element(name, attrs)
-	return setmetatable({
+	---@type element
+	local element = {
 		name = name,
 		attr = attrs or {},
 		children = {},
+		errors = {},
 		content = nil
-	}, XML_ELEMENT_MT)
+	}
+	return setmetatable(element, XML_ELEMENT_MT)
 end
 
 ---@param value str | bool
@@ -700,7 +701,7 @@ end
 ---@param packed bool
 ---@param indent_char str? \t
 ---@param cur_indent str? ""
----@return unknown
+---@return str
 function nxml.tostring(elem, packed, indent_char, cur_indent)
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
