@@ -1,3 +1,5 @@
+This is a fork of LuaNXML with LuaCATS annotations and a few bugfixes. 
+
 LuaNXML
 ===
 
