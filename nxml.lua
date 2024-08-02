@@ -15,7 +15,7 @@
 ---@field row int
 ---@field col int
 
----@class (exact) tokenizer
+---@class (exact) tokenizer: tokenizer_funcs
 ---@field data str
 ---@field cur_idx int
 ---@field cur_row int
@@ -24,28 +24,17 @@
 ---@field prev_col int
 ---@field len int
 
----@class (exact) parser
----@field tok tokenizer_blob
+---@class (exact) parser: parser_funcs
+---@field tok tokenizer
 ---@field errors error[]
 ---@field error_reporter error_fn
 
----@alias parser_blob parser_funcs | parser
----@alias tokenizer_blob tokenizer_funcs | tokenizer
----@alias element_blob element_funcs | element
-
----@class (exact) element
+---@class (exact) element: element_funcs
 ---@field content str[]?
----@field children element_blob[]
+---@field children element[]
 ---@field attr table<string, string>
 ---@field name str
 ---@field errors error[]
-
-local ffi = nil
-if require then
-	pcall(function()
-		ffi = require("ffi")
-	end)
-end
 
 ---@param str str
 ---@param start_idx int
@@ -97,12 +86,14 @@ local nxml = {}
 local TOKENIZER_FUNCS = {}
 local TOKENIZER_MT = {
 	__index = TOKENIZER_FUNCS,
-	__tostring = function(self) return "natif.nxml.tokenizer" end
+	__tostring = function(_)
+		return "natif.nxml.tokenizer"
+	end,
 }
 
 ---@param cstring str
 ---@param len int
----@return tokenizer_blob
+---@return tokenizer
 local function new_tokenizer(cstring, len)
 	---@type tokenizer
 	local tokenizer = {
@@ -112,8 +103,10 @@ local function new_tokenizer(cstring, len)
 		cur_col = 1,
 		prev_row = 1,
 		prev_col = 1,
-		len = len
+		len = len,
 	}
+	-- idk why luals doesn't like this
+	---@diagnostic disable-next-line: return-type-mismatch
 	return setmetatable(tokenizer, TOKENIZER_MT)
 end
 
@@ -122,7 +115,7 @@ local ws = {
 	[string.byte(" ")] = true,
 	[string.byte("\t")] = true,
 	[string.byte("\n")] = true,
-	[string.byte("\r")] = true
+	[string.byte("\r")] = true,
 }
 
 ---@param char int
@@ -151,7 +144,7 @@ end
 
 ---@param n int? 1
 function TOKENIZER_FUNCS:move(n)
-	---@cast self tokenizer_blob
+	---@cast self tokenizer
 	n = n or 1
 	local prev_idx = self.cur_idx
 	self.cur_idx = self.cur_idx + n
@@ -172,10 +165,12 @@ end
 ---@param n int? 1
 ---@return int
 function TOKENIZER_FUNCS:peek(n)
-	---@cast self tokenizer_blob
+	---@cast self tokenizer
 	n = n or 1
 	local idx = self.cur_idx + n
-	if idx >= self.len then return 0 end
+	if idx >= self.len then
+		return 0
+	end
 
 	return str_index(self.data, idx)
 end
@@ -186,21 +181,25 @@ function TOKENIZER_FUNCS:match_string(str)
 	local len = #str
 
 	for i = 0, len - 1 do
-		if self:peek(i) ~= str_index(str, i) then return false end
+		if self:peek(i) ~= str_index(str, i) then
+			return false
+		end
 	end
 	return true
 end
 
 ---@return bool
 function TOKENIZER_FUNCS:eof()
-	---@cast self tokenizer_blob
+	---@cast self tokenizer
 	return self.cur_idx >= self.len
 end
 
 ---@return int
 function TOKENIZER_FUNCS:cur_char()
-	---@cast self tokenizer_blob
-	if self:eof() then return 0 end
+	---@cast self tokenizer
+	if self:eof() then
+		return 0
+	end
 	return str_index(self.data, self.cur_idx)
 end
 
@@ -241,11 +240,11 @@ end
 
 ---@return str
 function TOKENIZER_FUNCS:read_quoted_string()
-	---@cast self tokenizer_blob
+	---@cast self tokenizer
 	local start_idx = self.cur_idx
 	local len = 0
 
-	while not self:eof() and self:cur_char() ~= string.byte("\"") do
+	while not self:eof() and self:cur_char() ~= string.byte('"') do
 		len = len + 1
 		self:move()
 	end
@@ -256,7 +255,7 @@ end
 
 ---@return str
 function TOKENIZER_FUNCS:read_unquoted_string()
-	---@cast self tokenizer_blob
+	---@cast self tokenizer
 	local start_idx = self.cur_idx - 1 -- first char is move()d
 	local len = 1
 
@@ -273,7 +272,7 @@ local C_LT = string.byte("<")
 local C_GT = string.byte(">")
 local C_SLASH = string.byte("/")
 local C_EQ = string.byte("=")
-local C_QUOTE = string.byte("\"")
+local C_QUOTE = string.byte('"')
 
 ---@return token?
 function TOKENIZER_FUNCS:next_token()
@@ -282,7 +281,9 @@ function TOKENIZER_FUNCS:next_token()
 	self.prev_row = self.cur_row
 	self.prev_col = self.cur_col
 
-	if self:eof() then return nil end
+	if self:eof() then
+		return nil
+	end
 
 	local c = self:cur_char()
 	self:move()
@@ -320,10 +321,12 @@ end
 local PARSER_FUNCS = {}
 local PARSER_MT = {
 	__index = PARSER_FUNCS,
-	__tostring = function(self) return "natif.nxml.parser" end
+	__tostring = function(_)
+		return "natif.nxml.parser"
+	end,
 }
 
----@param tokenizer tokenizer_blob
+---@param tokenizer tokenizer
 ---@param error_reporter fun(type, msg)?
 ---@return parser | parser_funcs parser
 local function new_parser(tokenizer, error_reporter)
@@ -331,8 +334,11 @@ local function new_parser(tokenizer, error_reporter)
 	local parser = {
 		tok = tokenizer,
 		errors = {},
-		error_reporter = error_reporter or function(type, msg) print("parser error: [" .. type .. "] " .. msg) end
+		error_reporter = error_reporter or function(type, msg)
+			print("parser error: [" .. type .. "] " .. msg)
+		end,
 	}
+	-- why does luals not care about here?
 	return setmetatable(parser, PARSER_MT)
 end
 
@@ -348,7 +354,7 @@ local XML_ELEMENT_MT = {
 ---@param type error_type
 ---@param msg str
 function PARSER_FUNCS:report_error(type, msg)
-	---@cast self parser_blob
+	---@cast self parser
 	self.error_reporter(type, msg)
 	---@type error
 	local error = { type = type, msg = msg, row = self.tok.prev_row, col = self.tok.prev_col }
@@ -358,7 +364,7 @@ end
 ---@param attr_table table<str, str>
 ---@param name str
 function PARSER_FUNCS:parse_attr(attr_table, name)
-	---@cast self parser_blob
+	---@cast self parser
 	local tok = self.tok:next_token()
 	if not tok then
 		self:report_error("missing_token", string.format("parsing attribute '%s' - did not find a token", name))
@@ -375,19 +381,23 @@ function PARSER_FUNCS:parse_attr(attr_table, name)
 		if tok.type == "string" then
 			attr_table[name] = tok.value
 		else
-			self:report_error("missing_attribute_value",
-				string.format("parsing attribute '%s' - expected a string after =, but did not find one", name))
+			self:report_error(
+				"missing_attribute_value",
+				string.format("parsing attribute '%s' - expected a string after =, but did not find one", name)
+			)
 		end
 	else
-		self:report_error("missing_equals_sign",
-			string.format("parsing attribute '%s' - did not find equals sign after attribute name", name))
+		self:report_error(
+			"missing_equals_sign",
+			string.format("parsing attribute '%s' - did not find equals sign after attribute name", name)
+		)
 	end
 end
 
 ---@param skip_opening_tag bool
----@return element_blob?
+---@return element?
 function PARSER_FUNCS:parse_element(skip_opening_tag)
-	---@cast self parser_blob
+	---@cast self parser
 	local tok
 	if not skip_opening_tag then
 		tok = self.tok:next_token()
@@ -437,7 +447,9 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 		end
 	end
 
-	if self_closing then return elem end
+	if self_closing then
+		return elem
+	end
 
 	while true do
 		tok = self.tok:next_token()
@@ -450,28 +462,39 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 
 				local end_name = self.tok:next_token()
 				if not end_name then
-					self:report_error("missing_token",
-						string.format("parsing element '%s' - did not find a token", elem_name))
+					self:report_error(
+						"missing_token",
+						string.format("parsing element '%s' - did not find a token", elem_name)
+					)
 					return
 				end
 				if end_name.type == "string" and end_name.value == elem_name then
 					local close_greater = self.tok:next_token()
 					if not close_greater then
-						self:report_error("missing_token",
-							string.format("parsing element '%s' - did not find a token", elem_name))
+						self:report_error(
+							"missing_token",
+							string.format("parsing element '%s' - did not find a token", elem_name)
+						)
 						return
 					end
 
 					if close_greater.type == ">" then
 						return elem
 					else
-						self:report_error("missing_element_close",
-							string.format("no closing '>' found for element '%s'", elem_name))
+						self:report_error(
+							"missing_element_close",
+							string.format("no closing '>' found for element '%s'", elem_name)
+						)
 					end
 				else
-					self:report_error("mismatched_closing_tag",
-						string.format("closing element is in wrong order - expected '</%s>', but instead got '%s'",
-							elem_name, tostring(end_name.value)))
+					self:report_error(
+						"mismatched_closing_tag",
+						string.format(
+							"closing element is in wrong order - expected '</%s>', but instead got '%s'",
+							elem_name,
+							tostring(end_name.value)
+						)
+					)
 				end
 				return elem
 			else
@@ -489,11 +512,11 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 	end
 end
 
----@return element_blob[]
+---@return element[]
 function PARSER_FUNCS:parse_elements()
-	---@cast self parser_blob
+	---@cast self parser
 	local tok = self.tok:next_token()
-	---@type element_blob[]
+	---@type element[]
 	local elems = {}
 	local elems_i = 1
 
@@ -520,10 +543,14 @@ end
 
 ---@return str
 function XML_ELEMENT_FUNCS:text()
-	---@cast self element_blob
-	if self.content == nil then return "" end
+	---@cast self element
+	if self.content == nil then
+		return ""
+	end
 	local content_count = #self.content
-	if content_count == 0 then return "" end
+	if content_count == 0 then
+		return ""
+	end
 
 	local text = self.content[1]
 	for i = 2, content_count do
@@ -540,12 +567,12 @@ function XML_ELEMENT_FUNCS:text()
 	return text
 end
 
----@param child element_blob
+---@param child element
 function XML_ELEMENT_FUNCS:add_child(child)
 	self.children[#self.children + 1] = child
 end
 
----@param children element_blob[]
+---@param children element[]
 function XML_ELEMENT_FUNCS:add_children(children)
 	local children_i = #self.children + 1
 	for i = 1, #children do
@@ -554,7 +581,7 @@ function XML_ELEMENT_FUNCS:add_children(children)
 	end
 end
 
----@param child element_blob
+---@param child element
 function XML_ELEMENT_FUNCS:remove_child(child)
 	for i = 1, #self.children do
 		if self.children[i] == child then
@@ -570,7 +597,7 @@ function XML_ELEMENT_FUNCS:remove_child_at(index)
 end
 
 function XML_ELEMENT_FUNCS:clear_children()
-	---@cast self element_blob
+	---@cast self element
 	self.children = {}
 end
 
@@ -579,7 +606,7 @@ function XML_ELEMENT_FUNCS:clear_attrs()
 end
 
 ---@param element_name str
----@return element_blob?
+---@return element?
 function XML_ELEMENT_FUNCS:first_of(element_name)
 	local i = 0
 	local n = #self.children
@@ -588,14 +615,16 @@ function XML_ELEMENT_FUNCS:first_of(element_name)
 		i = i + 1
 		local c = self.children[i]
 
-		if c.name == element_name then return c end
+		if c.name == element_name then
+			return c
+		end
 	end
 
 	return nil
 end
 
 ---@param element_name str
----@return fun(): element_blob?
+---@return fun(): element?
 function XML_ELEMENT_FUNCS:each_of(element_name)
 	local i = 1
 	local n = #self.children
@@ -612,7 +641,7 @@ function XML_ELEMENT_FUNCS:each_of(element_name)
 end
 
 ---@param element_name str
----@return element_blob[]
+---@return element[]
 function XML_ELEMENT_FUNCS:all_of(element_name)
 	local table = {}
 	local i = 1
@@ -623,7 +652,7 @@ function XML_ELEMENT_FUNCS:all_of(element_name)
 	return table
 end
 
----@return fun(): element_blob
+---@return fun(): element
 function XML_ELEMENT_FUNCS:each_child()
 	local i = 0
 	local n = #self.children
@@ -637,7 +666,7 @@ function XML_ELEMENT_FUNCS:each_child()
 end
 
 ---@param data str
----@return element_blob
+---@return element
 function nxml.parse(data)
 	local data_len = #data
 	local tok = new_tokenizer(data, data_len)
@@ -653,7 +682,7 @@ function nxml.parse(data)
 end
 
 ---@param data str
----@return element_blob[]
+---@return element[]
 function nxml.parse_many(data)
 	local data_len = #data
 	local tok = new_tokenizer(data, data_len)
@@ -674,7 +703,7 @@ end
 
 ---@param name str
 ---@param attrs table<str, str>? {}
----@return element_blob
+---@return element
 function nxml.new_element(name, attrs)
 	---@type element
 	local element = {
@@ -682,8 +711,9 @@ function nxml.new_element(name, attrs)
 		attr = attrs or {},
 		children = {},
 		errors = {},
-		content = nil
+		content = nil,
 	}
+	---@diagnostic disable-next-line: return-type-mismatch
 	return setmetatable(element, XML_ELEMENT_MT)
 end
 
@@ -691,13 +721,17 @@ end
 ---@return str
 local function attr_value_to_str(value)
 	local t = type(value)
-	if t == "string" then return value end
-	if t == "boolean" then return value and "1" or "0" end
+	if t == "string" then
+		return value
+	end
+	if t == "boolean" then
+		return value and "1" or "0"
+	end
 
 	return tostring(value)
 end
 
----@param elem element_blob
+---@param elem element
 ---@param packed bool
 ---@param indent_char str? \t
 ---@param cur_indent str? ""
@@ -709,7 +743,7 @@ function nxml.tostring(elem, packed, indent_char, cur_indent)
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
 
 	for k, v in pairs(elem.attr) do
-		s = s .. " " .. k .. "=\"" .. attr_value_to_str(v) .. "\""
+		s = s .. " " .. k .. '="' .. attr_value_to_str(v) .. '"'
 	end
 
 	if self_closing then
@@ -722,16 +756,24 @@ function nxml.tostring(elem, packed, indent_char, cur_indent)
 	local deeper_indent = cur_indent .. indent_char
 
 	if elem.content and #elem.content ~= 0 then
-		if not packed then s = s .. "\n" .. deeper_indent end
+		if not packed then
+			s = s .. "\n" .. deeper_indent
+		end
 		s = s .. elem:text()
 	end
 
-	if not packed then s = s .. "\n" end
+	if not packed then
+		s = s .. "\n"
+	end
 
-	for i, v in ipairs(elem.children) do
-		if not packed then s = s .. deeper_indent end
+	for _, v in ipairs(elem.children) do
+		if not packed then
+			s = s .. deeper_indent
+		end
 		s = s .. nxml.tostring(v, packed, indent_char, deeper_indent)
-		if not packed then s = s .. "\n" end
+		if not packed then
+			s = s .. "\n"
+		end
 	end
 
 	s = s .. cur_indent .. "</" .. elem.name .. ">"
