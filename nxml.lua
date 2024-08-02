@@ -720,6 +720,7 @@ end
 ---for content in nxml.edit_file("data/entities/animals/boss_centipede/boss_centipede.xml") do
 ---	content:first_of("DamageModelComponent"):set("hp", 2)
 ---end
+----- Kolmis file is edited once we exit the for loop.
 ---```
 ---@param file str
 ---@return fun(): element?
@@ -731,6 +732,7 @@ function nxml.edit_file(file)
 			ModTextFileSetContent(file, tostring(tree))
 			return
 		end
+		first_time = false
 		return tree
 	end
 end
