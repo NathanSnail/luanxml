@@ -92,9 +92,8 @@ local TOKENIZER_MT = {
 }
 
 ---@param cstring str
----@param len int
 ---@return tokenizer
-local function new_tokenizer(cstring, len)
+local function new_tokenizer(cstring)
 	---@type tokenizer
 	local tokenizer = {
 		data = cstring,
@@ -103,7 +102,7 @@ local function new_tokenizer(cstring, len)
 		cur_col = 1,
 		prev_row = 1,
 		prev_col = 1,
-		len = len,
+		len = #cstring,
 	}
 	-- idk why luals doesn't like this
 	---@diagnostic disable-next-line: return-type-mismatch
@@ -541,7 +540,12 @@ local function is_punctuation(str)
 	return str == "/" or str == "<" or str == ">" or str == "="
 end
 
----I don't know what this does. Maybe returns the element as a string of tokens that make it up?
+---Returns the content inside an element.
+---Example:
+---```xml
+---<Hi>Content</Hi>
+---```
+---Here `:text()` is "Content"
 ---@return str
 function XML_ELEMENT_FUNCS:text()
 	---@cast self element
@@ -666,7 +670,7 @@ end
 ---for child in elem:each_child() do
 ---	print(child.name)
 ---end
----@return fun(): element
+---@return fun(): element?
 function XML_ELEMENT_FUNCS:each_child()
 	---@cast self element
 	local i = 0
@@ -680,13 +684,49 @@ function XML_ELEMENT_FUNCS:each_child()
 	end
 end
 
----The primary nxml function, converts nxml source into an element.
----Note it is the content not the filename, use `nxml.parse_file()` to parse by filename.
----@param data str
+---Gets the given attribute.
+---@param attr str
+---@return str?
+function XML_ELEMENT_FUNCS:get(attr)
+	---@cast self element
+	return self.attr[attr]
+end
+
+---Sets the given attribute.
+---@param attr str
+---@param value any
+function XML_ELEMENT_FUNCS:set(attr, value)
+	---@cast self element
+	self.attr[attr] = tostring(value)
+end
+
+---Allows you to have an xml element which represents a file, with changes made in the xml element reflecting in the file when you exit the `edit_file()` scope.
+---Use like:
+---```lua
+---for content in nxml.edit_file("data/entities/animals/boss_centipede/boss_centipede.xml") do
+---	content:first_of("DamageModelComponent"):set("hp", 2)
+---end
+---```
+---@param file str
+---@return fun(): element?
+function nxml.edit_file(file)
+	local first_time = true
+	local tree = nxml.parse_file(file)
+	return function()
+		if not first_time then
+			ModTextFileSetContent(file, tostring(tree))
+			return
+		end
+		return tree
+	end
+end
+
+---Parses a file. This is noita specific as it uses `ModTextFileGetContent`.
+---@param file str
 ---@return element
-function nxml.parse(data)
-	local data_len = #data
-	local tok = new_tokenizer(data, data_len)
+function nxml.parse_file(file)
+	local content = ModTextFileGetContent(file)
+	local tok = new_tokenizer(content)
 	local parser = new_parser(tok)
 
 	local elem = parser:parse_element(false)
@@ -698,12 +738,33 @@ function nxml.parse(data)
 	return elem
 end
 
----I don't know what this does. Maybe it parses an xml file like <A /> <B />?
+---The primary nxml function, converts nxml source into an element.
+---Note it is the content not the filename, use `nxml.parse_file()` to parse by filename.
+---@param data str
+---@return element
+function nxml.parse(data)
+	local tok = new_tokenizer(data)
+	local parser = new_parser(tok)
+
+	local elem = parser:parse_element(false)
+
+	if not elem or (elem.errors and #elem.errors > 0) then
+		error("parser encountered errors")
+	end
+
+	return elem
+end
+
+---I don't know what this does. Maybe it parses an xml file like
+---```xml
+---<A />
+---<B />
+---<C />
+---```
 ---@param data str
 ---@return element[]
 function nxml.parse_many(data)
-	local data_len = #data
-	local tok = new_tokenizer(data, data_len)
+	local tok = new_tokenizer(data)
 	local parser = new_parser(tok)
 
 	local elems = parser:parse_elements()
