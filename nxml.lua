@@ -692,12 +692,26 @@ function XML_ELEMENT_FUNCS:get(attr)
 	return self.attr[attr]
 end
 
----Sets the given attribute.
+---@param value str | bool
+---@return str
+local function attr_value_to_str(value)
+	local t = type(value)
+	if t == "string" then
+		return value
+	end
+	if t == "boolean" then
+		return value and "1" or "0"
+	end
+
+	return tostring(value)
+end
+
+---Sets the given attribute, make sure your type can be stringified.
 ---@param attr str
 ---@param value any
 function XML_ELEMENT_FUNCS:set(attr, value)
 	---@cast self element
-	self.attr[attr] = tostring(value)
+	self.attr[attr] = attr_value_to_str(value)
 end
 
 ---Allows you to have an xml element which represents a file, with changes made in the xml element reflecting in the file when you exit the `edit_file()` scope.
@@ -796,20 +810,6 @@ function nxml.new_element(name, attrs, children)
 	}
 	---@diagnostic disable-next-line: return-type-mismatch
 	return setmetatable(element, XML_ELEMENT_MT)
-end
-
----@param value str | bool
----@return str
-local function attr_value_to_str(value)
-	local t = type(value)
-	if t == "string" then
-		return value
-	end
-	if t == "boolean" then
-		return value and "1" or "0"
-	end
-
-	return tostring(value)
 end
 
 ---Generally you should do tostring(elem) instead of calling this function.
