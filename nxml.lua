@@ -541,6 +541,7 @@ local function is_punctuation(str)
 	return str == "/" or str == "<" or str == ">" or str == "="
 end
 
+---I don't know what this does. Maybe returns the element as a string of tokens that make it up?
 ---@return str
 function XML_ELEMENT_FUNCS:text()
 	---@cast self element
@@ -567,22 +568,25 @@ function XML_ELEMENT_FUNCS:text()
 	return text
 end
 
+---Adds the given child
 ---@param child element
 function XML_ELEMENT_FUNCS:add_child(child)
 	self.children[#self.children + 1] = child
 end
 
+---Adds many children at once
 ---@param children element[]
 function XML_ELEMENT_FUNCS:add_children(children)
-	local children_i = #self.children + 1
-	for i = 1, #children do
-		self.children[children_i] = children[i]
-		children_i = children_i + 1
+	---@cast self element
+	for _, child in ipairs(children) do
+		self:add_child(child)
 	end
 end
 
+---Removes the given child, note that this is exact equality not structural equality so copies will not be considered equal.
 ---@param child element
 function XML_ELEMENT_FUNCS:remove_child(child)
+	---@cast self element
 	for i = 1, #self.children do
 		if self.children[i] == child then
 			table.remove(self.children, i)
@@ -593,6 +597,7 @@ end
 
 ---@param index int
 function XML_ELEMENT_FUNCS:remove_child_at(index)
+	---@cast self element
 	table.remove(self.children, index)
 end
 
@@ -602,30 +607,32 @@ function XML_ELEMENT_FUNCS:clear_children()
 end
 
 function XML_ELEMENT_FUNCS:clear_attrs()
+	---@cast self element
 	self.attr = {}
 end
 
+---Returns the first element with the given name.
 ---@param element_name str
 ---@return element?
 function XML_ELEMENT_FUNCS:first_of(element_name)
-	local i = 0
-	local n = #self.children
-
-	while i < n do
-		i = i + 1
-		local c = self.children[i]
-
-		if c.name == element_name then
-			return c
+	---@cast self element
+	for _, v in ipairs(self.children) do
+		if v.name == element_name then
+			return v
 		end
 	end
-
-	return nil
 end
 
+---Iterate over each child with the given name, effectively a filter.
+---Use like:
+---```lua
+---for dmc in entity:each_of("DamageModelComponent") do
+---	dmc.hp = "5"
+---end
 ---@param element_name str
 ---@return fun(): element?
 function XML_ELEMENT_FUNCS:each_of(element_name)
+	---@cast self element
 	local i = 1
 	local n = #self.children
 
@@ -640,9 +647,11 @@ function XML_ELEMENT_FUNCS:each_of(element_name)
 	end
 end
 
+---Collects all children with the given name into a table.
 ---@param element_name str
 ---@return element[]
 function XML_ELEMENT_FUNCS:all_of(element_name)
+	---@cast self element
 	local table = {}
 	local i = 1
 	for elem in self:each_of(element_name) do
@@ -652,8 +661,14 @@ function XML_ELEMENT_FUNCS:all_of(element_name)
 	return table
 end
 
+---Iterate over each child of the xml element, use like:
+---```lua
+---for child in elem:each_child() do
+---	print(child.name)
+---end
 ---@return fun(): element
 function XML_ELEMENT_FUNCS:each_child()
+	---@cast self element
 	local i = 0
 	local n = #self.children
 
@@ -665,6 +680,8 @@ function XML_ELEMENT_FUNCS:each_child()
 	end
 end
 
+---The primary nxml function, converts nxml source into an element.
+---Note it is the content not the filename, use `nxml.parse_file()` to parse by filename.
 ---@param data str
 ---@return element
 function nxml.parse(data)
@@ -681,6 +698,7 @@ function nxml.parse(data)
 	return elem
 end
 
+---I don't know what this does. Maybe it parses an xml file like <A /> <B />?
 ---@param data str
 ---@return element[]
 function nxml.parse_many(data)
@@ -701,15 +719,17 @@ function nxml.parse_many(data)
 	return elems
 end
 
+---Constructs an element with the given values, just a wrapper to set the metatable really.
 ---@param name str
 ---@param attrs table<str, str>? {}
+---@param children element[]? {}
 ---@return element
-function nxml.new_element(name, attrs)
+function nxml.new_element(name, attrs, children)
 	---@type element
 	local element = {
 		name = name,
 		attr = attrs or {},
-		children = {},
+		children = children or {},
 		errors = {},
 		content = nil,
 	}
@@ -731,10 +751,12 @@ local function attr_value_to_str(value)
 	return tostring(value)
 end
 
+---Generally you should do tostring(elem) instead of calling this function.
+---This function is just how it's implemented and is exposed for more customisation.
 ---@param elem element
 ---@param packed bool
 ---@param indent_char str? \t
----@param cur_indent str? ""
+---@param cur_indent str? '""'
 ---@return str
 function nxml.tostring(elem, packed, indent_char, cur_indent)
 	indent_char = indent_char or "\t"
