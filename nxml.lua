@@ -631,8 +631,9 @@ end
 ---Use like:
 ---```lua
 ---for dmc in entity:each_of("DamageModelComponent") do
----	dmc.hp = "5"
+---	dmc:set("hp", 5)
 ---end
+---```
 ---@param element_name str
 ---@return fun(): element?
 function XML_ELEMENT_FUNCS:each_of(element_name)
@@ -670,6 +671,7 @@ end
 ---for child in elem:each_child() do
 ---	print(child.name)
 ---end
+---```
 ---@return fun(): element?
 function XML_ELEMENT_FUNCS:each_child()
 	---@cast self element
@@ -771,7 +773,7 @@ function nxml.parse(data)
 	return elem
 end
 
----I don't know what this does. Maybe it parses an xml file like
+---I don't know what this does. Maybe it parses an xml file like:
 ---```xml
 ---<A />
 ---<B />
