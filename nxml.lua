@@ -378,6 +378,10 @@ function PARSER_FUNCS:parse_attr(attr_table, name)
 		end
 
 		if tok.type == "string" then
+			if attr_table[name] ~= nil then
+				self:report_error("duplicate_attribute", string.format("parsing attribute '%s' - attribute already exists", name))
+				return
+			end
 			attr_table[name] = tok.value
 		else
 			self:report_error(

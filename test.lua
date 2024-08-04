@@ -17,3 +17,7 @@ print(tostring(tree))
 print(nxml.tostring(tree, true))
 tree:add_child(nxml.parse("<Entity />"))
 print(tree)
+
+
+local dup_name = nxml.parse([[<Entity name="a" name="b" />]])
+assert(dup_name.attr.name == "a")
