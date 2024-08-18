@@ -152,7 +152,3 @@ LuaNXML's API is a bit more object oriented and abstract than something like xml
       see: `nxml.tostring`
 
       
-
-## LuaJIT FFI
-
-If the `require` function is available and the `ffi` module can be loaded (which is the case in a Noita mod if your `mod.xml` has `request_no_api_restrictions="1"` in it), minimal optimizations in string handling are used (which should result in less intermediate strings). The output and behavior is equivalent to when `ffi` is not available.
