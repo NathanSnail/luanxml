@@ -2,7 +2,7 @@
 ---@alias bool boolean
 ---@alias str string
 ---@alias token_type "string" | "<" | ">" | "/" | "="
----@alias error_type "missing_attribute_value" | "missing_element_close" | "missing_equals_sign" | "missing_element_name" | "missing_tag_open" | "mismatched_closing_tag" | "missing_token" | "missing_element"
+---@alias error_type "missing_attribute_value" | "missing_element_close" | "missing_equals_sign" | "missing_element_name" | "missing_tag_open" | "mismatched_closing_tag" | "missing_token" | "missing_element" | "duplicate_attribute"
 ---@alias error_fn fun(type: error_type, msg: str)
 
 ---@class (exact) token
@@ -379,7 +379,10 @@ function PARSER_FUNCS:parse_attr(attr_table, name)
 
 		if tok.type == "string" then
 			if attr_table[name] ~= nil then
-				self:report_error("duplicate_attribute", string.format("parsing attribute '%s' - attribute already exists", name))
+				self:report_error(
+					"duplicate_attribute",
+					string.format("parsing attribute '%s' - attribute already exists", name)
+				)
 				return
 			end
 			attr_table[name] = tok.value
@@ -544,6 +547,100 @@ local function is_punctuation(str)
 	return str == "/" or str == "<" or str == ">" or str == "="
 end
 
+--[[ Merge a single element into the specified tree at the given location ]]
+local function merge_element(new_elem, referenced_elem)
+	for attr_name, attr_value in pairs(referenced_elem.attr) do
+		if not new_elem.attr[attr_name] then
+			new_elem.attr[attr_name] = attr_value
+		end
+	end
+end
+
+--Merge the content of the base file into the child tree
+---@param root element
+---@param parent element
+---@param referenced element
+local function merge_xml(root, parent, referenced)
+	local index = 1
+	local nth_table = {}
+	for _, elem in ipairs(referenced.children) do
+		if not nth_table[elem.name] then
+			nth_table[elem.name] = 0
+		end
+		nth_table[elem.name] = nth_table[elem.name] + 1
+		local base = parent:nth_of(elem.name, nth_table[elem.name])
+		if base then
+			merge_element(base, elem)
+			if #elem.children > 0 then
+				merge_xml(root, base, elem)
+			end
+		else
+			table.insert(parent.children, index, elem)
+			index = index + 1
+		end
+	end
+
+	for attr_name, attr_value in pairs(referenced.attr) do
+		if not root:get(attr_name) then
+			root:set(attr_name, attr_value)
+		elseif attr_name == "tags" then
+			local tags = root:get("tags") .. "," .. attr_value
+			local tag_list = {}
+			local tag_table = {}
+			for tag in tags:gmatch("([^,]+)") do
+				if tag ~= "" and not tag_table[tag] then
+					table.insert(tag_list, tag)
+					tag_table[tag] = 1
+				end
+			end
+			tags = table.concat(tag_list, ",")
+			root:set(attr_name, tags)
+		end
+	end
+
+	--[[
+	TODO:
+	local to_remove = {}
+	for idx, elem in ipairs(parent.children) do
+		if elem.attr._remove_from_base == "1" then
+			table.insert(to_remove, 1, idx)
+		end
+	end
+	for _, idx in ipairs(to_remove) do
+		table.remove(parent.children, idx)
+	end
+]]
+end
+
+---Expands the Base files for an entity xml
+---WARN: This is not 100% identical to Nollas implementation, _remove_from_base does not work
+---
+---@param read (fun(path: str): str)? `ModTextFileGetContent`
+function XML_ELEMENT_FUNCS:expand_base_tags(read)
+	-- thanks Kaedenn for writing this!
+	read = read or ModTextFileGetContent
+	local base_tag = self:first_of("Base")
+	if not base_tag then
+		return
+	end
+
+	local file = base_tag:get("file")
+	if file then
+		local root_xml = nxml.parse_file(file, read)
+
+		root_xml:expand_base_tags(read)
+
+		merge_xml(self, base_tag, root_xml)
+		self:lift_child(base_tag)
+	end
+	for _, elem in ipairs(self.children) do
+		elem:expand_base_tags(read)
+	end
+	if self:first_of("Base") then
+		self:expand_base_tags(read)
+	end
+end
+
 ---Returns the content inside an element.
 ---Example:
 ---```xml
@@ -603,6 +700,23 @@ function XML_ELEMENT_FUNCS:remove_child(child)
 	end
 end
 
+---Removes the given child, but adds its children to this element
+---@param child element
+function XML_ELEMENT_FUNCS:lift_child(child)
+	---@cast self element
+	for k, v in ipairs(self.children) do
+		if v == child then
+			local dst_index = k + 1
+			for elem in child:each_child() do
+				table.insert(self.children, dst_index, elem)
+				dst_index = dst_index + 1
+			end
+			table.remove(self.children, k)
+			break
+		end
+	end
+end
+
 ---@param index int
 function XML_ELEMENT_FUNCS:remove_child_at(index)
 	---@cast self element
@@ -619,15 +733,34 @@ function XML_ELEMENT_FUNCS:clear_attrs()
 	self.attr = {}
 end
 
----Returns the first element with the given name.
+---Returns the first element with the given name and its index.
 ---@param element_name str
----@return element?
+---@return element?, int?
 function XML_ELEMENT_FUNCS:first_of(element_name)
 	---@cast self element
-	for _, v in ipairs(self.children) do
+	for k, v in ipairs(self.children) do
 		if v.name == element_name then
-			return v
+			return v, k
 		end
+	end
+end
+
+---Returns the first element with the given name and its index.
+---@param element_name str
+---@param n int
+---@return element?, int?
+function XML_ELEMENT_FUNCS:nth_of(element_name, n)
+	---@cast self element
+	for k, v in ipairs(self.children) do
+		n = n - 1
+		if v.name ~= element_name then
+			goto continue
+		end
+		n = n - 1
+		if n == 0 then
+			return v, k
+		end
+		::continue::
 	end
 end
 
@@ -729,13 +862,17 @@ end
 ----- Kolmis file is edited once we exit the for loop.
 ---```
 ---@param file str
+---@param read (fun(filename: str): str)? `ModTextFileGetContent
+---@param write fun(filename: str, content: str)? `ModTextFileSetContent`
 ---@return fun(): element?
-function nxml.edit_file(file)
+function nxml.edit_file(file, read, write)
+	read = read or ModTextFileGetContent
+	write = write or ModTextFileSetContent
 	local first_time = true
-	local tree = nxml.parse_file(file)
+	local tree = nxml.parse_file(file, read)
 	return function()
 		if not first_time then
-			ModTextFileSetContent(file, tostring(tree))
+			write(file, tostring(tree))
 			return
 		end
 		first_time = false
@@ -743,11 +880,13 @@ function nxml.edit_file(file)
 	end
 end
 
----Parses a file. This is noita specific as it uses `ModTextFileGetContent`.
+---Parses a file. This is noita specific as it uses `ModTextFileGetContent`, but if you pass your own read function you can use it in a standalone context.
 ---@param file str
+---@param read (fun(filename: str): str)? `ModTextFileGetContent
 ---@return element
-function nxml.parse_file(file)
-	local content = ModTextFileGetContent(file)
+function nxml.parse_file(file, read)
+	read = read or ModTextFileGetContent
+	local content = read(file)
 	local tok = new_tokenizer(content)
 	local parser = new_parser(tok)
 
