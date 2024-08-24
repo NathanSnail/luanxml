@@ -58,4 +58,6 @@ local enemy = nxml.new_element(
 
 vfs.enemy = tostring(enemy)
 hamis:expand_base(read)
+assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
+assert(hamis:first_of("DamageModelComponent"):get("max_hp") == "2")
 print(hamis)
