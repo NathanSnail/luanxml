@@ -44,11 +44,8 @@ for _ = 1, 10 do
 end
 
 local dmc = nxml.new_element("DamageModelComponent", { hp = "0.01" })
-print(dmc)
-
 local base = nxml.new_element("Base", { file = "enemy" }, { dmc })
 local hamis = nxml.new_element("Entity", { name = "hamis" }, { base })
-print("og", hamis)
 
 local enemy = nxml.new_element(
 	"Entity",
