@@ -18,6 +18,44 @@ print(nxml.tostring(tree, true))
 tree:add_child(nxml.parse("<Entity />"))
 print(tree)
 
-
 local dup_name = nxml.parse([[<Entity name="a" name="b" />]])
 assert(dup_name.attr.name == "a")
+
+---@type {[string]: string}
+local vfs = {}
+
+---@param filename string
+---@return string?
+local function read(filename)
+	return vfs[filename]
+end
+
+---@param filename string
+---@param content string
+local function write(filename, content)
+	vfs[filename] = content
+end
+for _ = 1, 10 do
+	print("")
+end
+print("===============================")
+for _ = 1, 10 do
+	print("")
+end
+
+local dmc = nxml.new_element("DamageModelComponent", { hp = "0.01" })
+print(dmc)
+
+local base = nxml.new_element("Base", { file = "enemy" }, { dmc })
+local hamis = nxml.new_element("Entity", { name = "hamis" }, { base })
+print("og", hamis)
+
+local enemy = nxml.new_element(
+	"Entity",
+	{ name = "enemy" },
+	{ nxml.new_element("DamageModelComponent", { hp = "999", max_hp = "2" }) }
+)
+
+vfs.enemy = tostring(enemy)
+hamis:expand_base(read)
+print(hamis)

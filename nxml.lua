@@ -547,40 +547,42 @@ local function is_punctuation(str)
 	return str == "/" or str == "<" or str == ">" or str == "="
 end
 
---[[ Merge a single element into the specified tree at the given location ]]
-local function merge_element(new_elem, referenced_elem)
-	for attr_name, attr_value in pairs(referenced_elem.attr) do
-		if not new_elem.attr[attr_name] then
-			new_elem.attr[attr_name] = attr_value
+---Copies attributes from `source` to `dest` as defaults
+---@param dest element
+---@param source element
+local function merge_element(dest, source)
+	for attr_name, attr_value in pairs(source.attr) do
+		if dest:get(attr_name) == nil then
+			dest:set(attr_name, attr_value)
 		end
 	end
 end
 
 --Merge the content of the base file into the child tree
 ---@param root element
----@param parent element
----@param referenced element
-local function merge_xml(root, parent, referenced)
+---@param base_element element
+---@param base_file element
+local function merge_xml(root, base_element, base_file)
 	local index = 1
-	local nth_table = {}
-	for _, elem in ipairs(referenced.children) do
-		if not nth_table[elem.name] then
-			nth_table[elem.name] = 0
+	local counts = {}
+	for elem in base_file:each_child() do
+		if not counts[elem.name] then
+			counts[elem.name] = 0
 		end
-		nth_table[elem.name] = nth_table[elem.name] + 1
-		local base = parent:nth_of(elem.name, nth_table[elem.name])
-		if base then
-			merge_element(base, elem)
-			if #elem.children > 0 then
+		counts[elem.name] = counts[elem.name] + 1
+		local modifications = base_element:nth_of(elem.name, counts[elem.name])
+		if modifications then
+			merge_element(modifications, elem)
+			--[[if #elem.children > 0 then
 				merge_xml(root, base, elem)
-			end
+			end]]
 		else
-			table.insert(parent.children, index, elem)
+			table.insert(base_element.children, index, elem)
 			index = index + 1
 		end
 	end
 
-	for attr_name, attr_value in pairs(referenced.attr) do
+	for attr_name, attr_value in pairs(base_file.attr) do
 		if not root:get(attr_name) then
 			root:set(attr_name, attr_value)
 		elseif attr_name == "tags" then
@@ -613,10 +615,11 @@ local function merge_xml(root, parent, referenced)
 end
 
 ---Expands the Base files for an entity xml
----WARN: This is not 100% identical to Nollas implementation, _remove_from_base does not work
+---**WARN: This is not 100% identical to Nollas implementation, _remove_from_base does not work**
 ---
 ---@param read (fun(path: str): str)? `ModTextFileGetContent`
-function XML_ELEMENT_FUNCS:expand_base_tags(read)
+function XML_ELEMENT_FUNCS:expand_base(read)
+	---@cast self element
 	-- thanks Kaedenn for writing this!
 	read = read or ModTextFileGetContent
 	local base_tag = self:first_of("Base")
@@ -628,16 +631,16 @@ function XML_ELEMENT_FUNCS:expand_base_tags(read)
 	if file then
 		local root_xml = nxml.parse_file(file, read)
 
-		root_xml:expand_base_tags(read)
+		root_xml:expand_base(read)
 
 		merge_xml(self, base_tag, root_xml)
 		self:lift_child(base_tag)
 	end
-	for _, elem in ipairs(self.children) do
-		elem:expand_base_tags(read)
+	for elem in self:each_child() do
+		elem:expand_base(read)
 	end
 	if self:first_of("Base") then
-		self:expand_base_tags(read)
+		self:expand_base(read)
 	end
 end
 
@@ -752,7 +755,6 @@ end
 function XML_ELEMENT_FUNCS:nth_of(element_name, n)
 	---@cast self element
 	for k, v in ipairs(self.children) do
-		n = n - 1
 		if v.name ~= element_name then
 			goto continue
 		end
@@ -862,7 +864,7 @@ end
 ----- Kolmis file is edited once we exit the for loop.
 ---```
 ---@param file str
----@param read (fun(filename: str): str)? `ModTextFileGetContent
+---@param read (fun(filename: str): str)? `ModTextFileGetContent`
 ---@param write fun(filename: str, content: str)? `ModTextFileSetContent`
 ---@return fun(): element?
 function nxml.edit_file(file, read, write)
@@ -882,7 +884,7 @@ end
 
 ---Parses a file. This is noita specific as it uses `ModTextFileGetContent`, but if you pass your own read function you can use it in a standalone context.
 ---@param file str
----@param read (fun(filename: str): str)? `ModTextFileGetContent
+---@param read (fun(filename: str): str)? `ModTextFileGetContent`
 ---@return element
 function nxml.parse_file(file, read)
 	read = read or ModTextFileGetContent
