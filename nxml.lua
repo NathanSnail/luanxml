@@ -621,28 +621,33 @@ end
 ---@param exists (fun(path: str): bool)? `ModDoesFileExist`
 function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	---@cast self element
+	if self.name ~= "Entity" then
+		return
+	end
+	---@cast self element
 	-- thanks Kaedenn for writing this!
 	read = read or ModTextFileGetContent
 	exists = exists or ModDoesFileExist
-	local base_tag = self:first_of("Base")
-	if not base_tag then
-		return
-	end
+	local base_tag
+	while true do
+		base_tag = self:first_of("Base")
+		if not base_tag then
+			break
+		end
+		local file = base_tag:get("file")
+		if file and exists(file) then
+			local root_xml = nxml.parse_file(file, read)
 
-	local file = base_tag:get("file")
-	if file and exists(file) then
-		local root_xml = nxml.parse_file(file, read)
+			root_xml:expand_base(read, exists)
 
-		root_xml:expand_base(read, exists)
-
-		merge_xml(self, base_tag, root_xml)
-		self:lift_child(base_tag)
+			merge_xml(self, base_tag, root_xml)
+			self:lift_child(base_tag)
+		else
+			self:remove_child(base_tag)
+		end
 	end
 	for elem in self:each_child() do
 		elem:expand_base(read, exists)
-	end
-	if self:first_of("Base") then
-		self:expand_base(read, exists)
 	end
 end
 
