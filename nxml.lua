@@ -618,17 +618,19 @@ end
 ---**WARN: This is not 100% identical to Nollas implementation, _remove_from_base does not work**
 ---
 ---@param read (fun(path: str): str)? `ModTextFileGetContent`
-function XML_ELEMENT_FUNCS:expand_base(read)
+---@param exists (fun(path: str): bool)? `ModDoesFileExist`
+function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	---@cast self element
 	-- thanks Kaedenn for writing this!
 	read = read or ModTextFileGetContent
+	exists = exists or ModDoesFileExist
 	local base_tag = self:first_of("Base")
 	if not base_tag then
 		return
 	end
 
 	local file = base_tag:get("file")
-	if file then
+	if file and exists(file) then
 		local root_xml = nxml.parse_file(file, read)
 
 		root_xml:expand_base(read)
