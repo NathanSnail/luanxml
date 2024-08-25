@@ -633,16 +633,16 @@ function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	if file and exists(file) then
 		local root_xml = nxml.parse_file(file, read)
 
-		root_xml:expand_base(read)
+		root_xml:expand_base(read, exists)
 
 		merge_xml(self, base_tag, root_xml)
 		self:lift_child(base_tag)
 	end
 	for elem in self:each_child() do
-		elem:expand_base(read)
+		elem:expand_base(read, exists)
 	end
 	if self:first_of("Base") then
-		self:expand_base(read)
+		self:expand_base(read, exists)
 	end
 end
 
