@@ -549,7 +549,7 @@ local function is_punctuation(str)
 	return str == "/" or str == "<" or str == ">" or str == "="
 end
 
----Copies attributes from `source` to `dest` as defaults
+---Copies attributes from `source` to `dest` if dest doesn't have a value
 ---@param dest element
 ---@param source element
 local function merge_element(dest, source)
@@ -650,6 +650,23 @@ function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	end
 	for elem in self:each_child() do
 		elem:expand_base(read, exists)
+	end
+end
+
+---@param defaults table<string, table<string, any>>
+function XML_ELEMENT_FUNCS:apply_defaults(defaults)
+	---@cast self element
+	local apply = defaults[self.name]
+	for child in self:each_child() do
+		child:apply_defaults(defaults)
+	end
+	if not apply then
+		return
+	end
+	for k, v in pairs(apply) do
+		if self:get(k) == nil then
+			self:set(k, v)
+		end
 	end
 end
 
