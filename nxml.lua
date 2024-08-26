@@ -138,7 +138,7 @@ local punct = {
 ---@return bool
 function TOKENIZER_FUNCS:is_whitespace_or_punctuation(char)
 	local n = tonumber(char)
-	--- We can disable here because is_whitespace(!int) -> false
+	-- We can disable here because is_whitespace(!int) -> false
 	---@diagnostic disable-next-line: param-type-mismatch
 	return self:is_whitespace(n) or punct[n] or false
 end
@@ -702,13 +702,11 @@ function XML_ELEMENT_FUNCS:text()
 	return text
 end
 
----Adds the given child
 ---@param child element
 function XML_ELEMENT_FUNCS:add_child(child)
 	self.children[#self.children + 1] = child
 end
 
----Adds many children at once
 ---@param children element[]
 function XML_ELEMENT_FUNCS:add_children(children)
 	---@cast self element
@@ -762,7 +760,7 @@ function XML_ELEMENT_FUNCS:clear_attrs()
 	self.attr = {}
 end
 
----Returns the first element with the given name and its index.
+---Returns the first child element with the given name and its index.
 ---@param element_name str
 ---@return element?, int?
 function XML_ELEMENT_FUNCS:first_of(element_name)
@@ -774,7 +772,7 @@ function XML_ELEMENT_FUNCS:first_of(element_name)
 	end
 end
 
----Returns the first element with the given name and its index.
+---Returns the nth child element with the given name and its index.
 ---@param element_name str
 ---@param n int
 ---@return element?, int?
@@ -851,14 +849,6 @@ function XML_ELEMENT_FUNCS:each_child()
 	end
 end
 
----Gets the given attribute.
----@param attr str
----@return str?
-function XML_ELEMENT_FUNCS:get(attr)
-	---@cast self element
-	return self.attr[attr]
-end
-
 ---@param value str | bool
 ---@return str
 local function attr_value_to_str(value)
@@ -871,6 +861,14 @@ local function attr_value_to_str(value)
 	end
 
 	return tostring(value)
+end
+
+---Gets the given attribute, note get's value is probably stringified and not the true value.
+---@param attr str
+---@return str?
+function XML_ELEMENT_FUNCS:get(attr)
+	---@cast self element
+	return self.attr[attr]
 end
 
 ---Sets the given attribute, make sure your type can be stringified.
