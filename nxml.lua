@@ -560,7 +560,7 @@ local function merge_element(dest, source)
 	end
 end
 
---Merge the content of the base file into the child tree
+---Merge the content of the base file into the child tree
 ---@param root element
 ---@param base_element element
 ---@param base_file element
