@@ -81,6 +81,8 @@ end
 
 ---@class nxml
 local nxml = {}
+---@type fun(type: error_type, msg: str)?
+nxml.error_handler = nil
 
 ---@class tokenizer_funcs
 local TOKENIZER_FUNCS = {}
@@ -326,7 +328,7 @@ local PARSER_MT = {
 }
 
 ---@param tokenizer tokenizer
----@param error_reporter fun(type, msg)?
+---@param error_reporter fun(type: error_type, msg: str)?
 ---@return parser | parser_funcs parser
 local function new_parser(tokenizer, error_reporter)
 	---@type parser
@@ -529,7 +531,7 @@ function PARSER_FUNCS:parse_elements()
 	while tok and tok.type == "<" do
 		local next_element = self:parse_element(true)
 		if not next_element then
-			self.error_reporter("missing_element", "parse_element returned nil while parsing elements")
+			self:report_error("missing_element", "parse_element returned nil while parsing elements")
 			return elems
 		end
 		elems[elems_i] = next_element
@@ -897,7 +899,7 @@ function nxml.parse_file(file, read)
 	read = read or ModTextFileGetContent
 	local content = read(file)
 	local tok = new_tokenizer(content)
-	local parser = new_parser(tok)
+	local parser = new_parser(tok, nxml.error_handler)
 
 	local elem = parser:parse_element(false)
 
@@ -914,7 +916,7 @@ end
 ---@return element
 function nxml.parse(data)
 	local tok = new_tokenizer(data)
-	local parser = new_parser(tok)
+	local parser = new_parser(tok, nxml.error_handler)
 
 	local elem = parser:parse_element(false)
 
@@ -935,7 +937,7 @@ end
 ---@return element[]
 function nxml.parse_many(data)
 	local tok = new_tokenizer(data)
-	local parser = new_parser(tok)
+	local parser = new_parser(tok, nxml.error_handler)
 
 	local elems = parser:parse_elements()
 
