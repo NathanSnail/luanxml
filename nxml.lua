@@ -617,14 +617,16 @@ local function merge_xml(root, base_element, base_file)
 end
 
 ---Expands the Base files for an entity xml
+---Returns `self` for chaining purposes.
 ---**WARN: This is not 100% identical to Nollas implementation, _remove_from_base does not work**
 ---
 ---@param read (fun(path: str): str)? `ModTextFileGetContent`
 ---@param exists (fun(path: str): bool)? `ModDoesFileExist`
+---@return self
 function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	---@cast self element
 	if self.name ~= "Entity" then
-		return
+		return self
 	end
 	---@cast self element
 	-- thanks Kaedenn for writing this!
@@ -651,9 +653,12 @@ function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	for elem in self:each_child() do
 		elem:expand_base(read, exists)
 	end
+	return self
 end
 
+---Returns `self` for chaining purposes.
 ---@param defaults table<string, table<string, any>>
+---@return element
 function XML_ELEMENT_FUNCS:apply_defaults(defaults)
 	---@cast self element
 	local apply = defaults[self.name]
@@ -661,13 +666,14 @@ function XML_ELEMENT_FUNCS:apply_defaults(defaults)
 		child:apply_defaults(defaults)
 	end
 	if not apply then
-		return
+		return self
 	end
 	for k, v in pairs(apply) do
 		if self:get(k) == nil then
 			self:set(k, v)
 		end
 	end
+	return self
 end
 
 ---Returns the content inside an element.
@@ -702,21 +708,27 @@ function XML_ELEMENT_FUNCS:text()
 	return text
 end
 
+---Returns `self` for chaining purposes.
 ---@param child element
 function XML_ELEMENT_FUNCS:add_child(child)
 	self.children[#self.children + 1] = child
+	return self
 end
 
+---Returns `self` for chaining purposes.
 ---@param children element[]
+---@return self
 function XML_ELEMENT_FUNCS:add_children(children)
 	---@cast self element
 	for _, child in ipairs(children) do
 		self:add_child(child)
 	end
+	return self
 end
 
----Removes the given child, note that this is exact equality not structural equality so copies will not be considered equal.
+---Removes the given child, note that this is exact equality not structural equality so copies will not be considered equal. Returns `self` for chaining purposes.
 ---@param child element
+---@return self
 function XML_ELEMENT_FUNCS:remove_child(child)
 	---@cast self element
 	for i = 1, #self.children do
@@ -725,10 +737,12 @@ function XML_ELEMENT_FUNCS:remove_child(child)
 			break
 		end
 	end
+	return self
 end
 
----Removes the given child, but adds its children to this element
+---Removes the given child, but adds its children to this element. Returns `self` for chaining purposes
 ---@param child element
+---@return element
 function XML_ELEMENT_FUNCS:lift_child(child)
 	---@cast self element
 	for k, v in ipairs(self.children) do
@@ -742,22 +756,32 @@ function XML_ELEMENT_FUNCS:lift_child(child)
 			break
 		end
 	end
+	return self
 end
 
+---Returns `self` for chaining purposes
 ---@param index int
+---@return element
 function XML_ELEMENT_FUNCS:remove_child_at(index)
 	---@cast self element
 	table.remove(self.children, index)
+	return self
 end
 
+---Returns `self` for chaining purposes
+---@return element
 function XML_ELEMENT_FUNCS:clear_children()
 	---@cast self element
 	self.children = {}
+	return self
 end
 
+---Returns `self` for chaining purposes
+---@return element
 function XML_ELEMENT_FUNCS:clear_attrs()
 	---@cast self element
 	self.attr = {}
+	return self
 end
 
 ---Returns the first child element with the given name and its index.
@@ -871,12 +895,14 @@ function XML_ELEMENT_FUNCS:get(attr)
 	return self.attr[attr]
 end
 
----Sets the given attribute, make sure your type can be stringified.
+---Sets the given attribute, make sure your type can be stringified. Returns `self` for chaining purposes.
 ---@param attr str
 ---@param value any
+---@return element
 function XML_ELEMENT_FUNCS:set(attr, value)
 	---@cast self element
 	self.attr[attr] = attr_value_to_str(value)
+	return self
 end
 
 ---Allows you to have an xml element which represents a file, with changes made in the xml element reflecting in the file when you exit the `edit_file()` scope.
