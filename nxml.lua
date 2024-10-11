@@ -815,6 +815,7 @@ function XML_ELEMENT_FUNCS:nth_of(element_name, n)
 end
 
 ---Iterate over each child with the given name, effectively a filter.
+---Note that this function will behave strangely if you mutate children while iterating.
 ---Use like:
 ---```lua
 ---for dmc in entity:each_of("DamageModelComponent") do
