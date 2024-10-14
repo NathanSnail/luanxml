@@ -906,6 +906,20 @@ function XML_ELEMENT_FUNCS:set(attr, value)
 	return self
 end
 
+---@return element
+function XML_ELEMENT_FUNCS:clone()
+	---@cast self element
+	local children = {}
+	for e in self:each_child() do
+		table.insert(children, e:clone())
+	end
+	local attr = {}
+	for k, v in pairs(self.attr) do
+		attr[k] = v
+	end
+	return nxml.new_element(self.name, attr, children)
+end
+
 ---Allows you to have an xml element which represents a file, with changes made in the xml element reflecting in the file when you exit the `edit_file()` scope.
 ---Use like:
 ---```lua

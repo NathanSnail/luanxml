@@ -31,6 +31,12 @@ local function read(filename)
 end
 
 ---@param filename string
+---@return bool
+local function exists(filename)
+	return vfs[filename] ~= nil
+end
+
+---@param filename string
 ---@param content string
 local function write(filename, content)
 	vfs[filename] = content
@@ -54,7 +60,10 @@ local enemy = nxml.new_element(
 )
 
 vfs.enemy = tostring(enemy)
-hamis:expand_base(read)
+hamis:expand_base(read, exists)
 assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
 assert(hamis:first_of("DamageModelComponent"):get("max_hp") == "2")
 print(hamis)
+local evil_hamis = hamis:clone()
+evil_hamis:first_of("DamageModelComponent"):set("hp", -1)
+assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
