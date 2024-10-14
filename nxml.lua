@@ -622,7 +622,7 @@ end
 ---
 ---@param read (fun(path: str): str)? `ModTextFileGetContent`
 ---@param exists (fun(path: str): bool)? `ModDoesFileExist`
----@return self
+---@return element self
 function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	---@cast self element
 	if self.name ~= "Entity" then
@@ -717,7 +717,7 @@ end
 
 ---Returns `self` for chaining purposes.
 ---@param children element[]
----@return self
+---@return element self
 function XML_ELEMENT_FUNCS:add_children(children)
 	---@cast self element
 	for _, child in ipairs(children) do
@@ -728,7 +728,7 @@ end
 
 ---Removes the given child, note that this is exact equality not structural equality so copies will not be considered equal. Returns `self` for chaining purposes.
 ---@param child element
----@return self
+---@return element self
 function XML_ELEMENT_FUNCS:remove_child(child)
 	---@cast self element
 	for i = 1, #self.children do
