@@ -1010,14 +1010,19 @@ end
 
 ---Constructs an element with the given values, just a wrapper to set the metatable really.
 ---@param name str
----@param attrs table<str, str>? {}
+---@param attrs table<str, any>? {}
 ---@param children element[]? {}
 ---@return element
 function nxml.new_element(name, attrs, children)
+	local attr = {}
+	attrs = attrs or {}
+	for k, v in pairs(attrs) do
+		attr[k] = attr_value_to_str(v)
+	end
 	---@type element
 	local element = {
 		name = name,
-		attr = attrs or {},
+		attr = attr,
 		children = children or {},
 		errors = {},
 		content = nil,
