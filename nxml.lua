@@ -710,7 +710,9 @@ end
 
 ---Returns `self` for chaining purposes.
 ---@param child element
+---@return element self
 function XML_ELEMENT_FUNCS:add_child(child)
+	---@cast self element
 	self.children[#self.children + 1] = child
 	return self
 end
@@ -724,6 +726,49 @@ function XML_ELEMENT_FUNCS:add_children(children)
 		self:add_child(child)
 	end
 	return self
+end
+
+---Creates a new element and adds it as a child to this element.
+---Convenience function that combines xml:add_child with nxml.new_element.
+---
+---Example usage:
+---```
+--- elem:create_child("LifetimeComponent", { lifetime = 30 })
+---```
+---@param name str
+---@param attrs table<str, any>? description of child element
+---@param children element[]? child elements
+---@return element new the element that was created
+function XML_ELEMENT_FUNCS:create_child(name, attrs, children)
+	local elem = nxml.new_element(name, attrs, children)
+	self:add_child(elem)
+	return elem
+end
+
+---Creates several new elements and inserts them as children to this element.
+---Convenience function that combines xml:add_children with nxml.new_element.
+---
+---Example usage:
+---```
+---	elem:create_children(
+---		{ AbilityComponent = {
+---			ui_name = "$item_jar_with_mat"
+---		}},
+---		{ DamageModelComponent = {
+---			hp = 2
+---		}}
+---	)
+---```
+---@param ... table<str, table<str,any>> descriptions of child elements
+---@return element self for chaining purposes
+function XML_ELEMENT_FUNCS:create_children(...)
+	local elems = {}
+	for _, elem_desc in ipairs({...}) do
+		for name, attrs in pairs(elem_desc) do
+			table.insert(elems, nxml.new_element(name, attrs))
+		end
+	end
+	return self:add_children(elems)
 end
 
 ---Removes the given child, note that this is exact equality not structural equality so copies will not be considered equal. Returns `self` for chaining purposes.

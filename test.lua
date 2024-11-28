@@ -59,6 +59,12 @@ local enemy = nxml.new_element(
 	{ nxml.new_element("DamageModelComponent", { hp = "999", max_hp = "2" }) }
 )
 
+enemy:create_children({
+	LifetimeComponent = {
+		lifetime = 300
+	}
+})
+
 vfs.enemy = tostring(enemy)
 hamis:expand_base(read, exists)
 assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
@@ -67,3 +73,4 @@ print(hamis)
 local evil_hamis = hamis:clone()
 evil_hamis:first_of("DamageModelComponent"):set("hp", -1)
 assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
+assert(enemy:first_of("LifetimeComponent"):get("lifetime") == "300")
