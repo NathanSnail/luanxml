@@ -983,7 +983,8 @@ function nxml.parse(data)
 	return elem
 end
 
----I don't know what this does. Maybe it parses an xml file like:
+---This parses xml files with multiple base nodes, useful for biome xmls.
+---Exaample file:
 ---```xml
 ---<A />
 ---<B />
