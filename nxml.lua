@@ -763,7 +763,7 @@ end
 ---@return element self for chaining purposes
 function XML_ELEMENT_FUNCS:create_children(...)
 	local elems = {}
-	for _, elem_desc in ipairs({...}) do
+	for _, elem_desc in ipairs({ ... }) do
 		for name, attrs in pairs(elem_desc) do
 			table.insert(elems, nxml.new_element(name, attrs))
 		end
@@ -984,7 +984,7 @@ function nxml.edit_file(file, read, write)
 	local tree = nxml.parse_file(file, read)
 	return function()
 		if not first_time then
-			write(file, tostring(tree))
+			write(file, nxml.to_string(tree))
 			return
 		end
 		first_time = false
@@ -1127,6 +1127,67 @@ function nxml.tostring(elem, packed, indent_char, cur_indent)
 	s = s .. cur_indent .. "</" .. elem.name .. ">"
 
 	return s
+end
+
+---New tostring function utilizing concat, do what you want with it
+---@param elem element
+---@param packed? bool
+---@param indent_char str? \t
+---@param cur_indent str? '""'
+---@return str
+function nxml.to_string(elem, packed, indent_char, cur_indent)
+	local buffer = { "<" }
+
+	indent_char = indent_char or "\t"
+	cur_indent = cur_indent or ""
+	buffer[#buffer + 1] = elem.name
+	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
+
+	for k, v in pairs(elem.attr) do
+		buffer[#buffer + 1] = " "
+		buffer[#buffer + 1] = k
+		buffer[#buffer + 1] = '="'
+		buffer[#buffer + 1] = attr_value_to_str(v)
+		buffer[#buffer + 1] = '"'
+	end
+
+	if self_closing then
+		buffer[#buffer + 1] = " />"
+		return table.concat(buffer)
+	end
+
+	buffer[#buffer + 1] = ">"
+
+	local deeper_indent = cur_indent .. indent_char
+
+	if elem.content and #elem.content ~= 0 then
+		if not packed then
+			buffer[#buffer + 1] = "\n"
+			buffer[#buffer + 1] = deeper_indent
+		end
+		buffer[#buffer + 1] = elem:text()
+	end
+
+	if not packed then
+		buffer[#buffer + 1] = "\n"
+	end
+
+	for _, v in ipairs(elem.children) do
+		if not packed then
+			buffer[#buffer + 1] = deeper_indent
+		end
+		buffer[#buffer + 1] = nxml.to_string(v, packed, indent_char, deeper_indent)
+		if not packed then
+			buffer[#buffer + 1] = "\n"
+		end
+	end
+
+	buffer[#buffer + 1] = cur_indent
+	buffer[#buffer + 1] = "</"
+	buffer[#buffer + 1] = elem.name
+	buffer[#buffer + 1] = ">"
+
+	return table.concat(buffer)
 end
 
 return nxml
