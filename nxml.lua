@@ -984,7 +984,7 @@ function nxml.edit_file(file, read, write)
 	local tree = nxml.parse_file(file, read)
 	return function()
 		if not first_time then
-			write(file, nxml.to_string(tree))
+			write(file, nxml.tostring(tree))
 			return
 		end
 		first_time = false
@@ -1077,58 +1077,6 @@ function nxml.new_element(name, attrs, children)
 	return setmetatable(element, XML_ELEMENT_MT)
 end
 
----Generally you should do tostring(elem) instead of calling this function.
----This function is just how it's implemented and is exposed for more customisation.
----@param elem element
----@param packed bool
----@param indent_char str? \t
----@param cur_indent str? '""'
----@return str
-function nxml.tostring(elem, packed, indent_char, cur_indent)
-	indent_char = indent_char or "\t"
-	cur_indent = cur_indent or ""
-	local s = "<" .. elem.name
-	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
-
-	for k, v in pairs(elem.attr) do
-		s = s .. " " .. k .. '="' .. attr_value_to_str(v) .. '"'
-	end
-
-	if self_closing then
-		s = s .. " />"
-		return s
-	end
-
-	s = s .. ">"
-
-	local deeper_indent = cur_indent .. indent_char
-
-	if elem.content and #elem.content ~= 0 then
-		if not packed then
-			s = s .. "\n" .. deeper_indent
-		end
-		s = s .. elem:text()
-	end
-
-	if not packed then
-		s = s .. "\n"
-	end
-
-	for _, v in ipairs(elem.children) do
-		if not packed then
-			s = s .. deeper_indent
-		end
-		s = s .. nxml.tostring(v, packed, indent_char, deeper_indent)
-		if not packed then
-			s = s .. "\n"
-		end
-	end
-
-	s = s .. cur_indent .. "</" .. elem.name .. ">"
-
-	return s
-end
-
 local function to_string_internal(elem, packed, indent_char, cur_indent, buffer)
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
@@ -1181,13 +1129,14 @@ local function to_string_internal(elem, packed, indent_char, cur_indent, buffer)
 	return table.concat(buffer)
 end
 
----New tostring function utilizing concat, do what you want with it
+---Generally you should do tostring(elem) instead of calling this function.
+---This function is just how it's implemented and is exposed for more customisation.
 ---@param elem element
 ---@param packed? bool
 ---@param indent_char str? \t
 ---@param cur_indent str? '""'
 ---@return str
-function nxml.to_string(elem, packed, indent_char, cur_indent)
+function nxml.tostring(elem, packed, indent_char, cur_indent)
 	local buffer = {}
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
