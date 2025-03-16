@@ -61,8 +61,8 @@ local enemy = nxml.new_element(
 
 enemy:create_children({
 	LifetimeComponent = {
-		lifetime = 300
-	}
+		lifetime = 300,
+	},
 })
 
 vfs.enemy = tostring(enemy)
@@ -74,3 +74,41 @@ local evil_hamis = hamis:clone()
 evil_hamis:first_of("DamageModelComponent"):set("hp", -1)
 assert(hamis:first_of("DamageModelComponent"):get("hp") == "0.01")
 assert(enemy:first_of("LifetimeComponent"):get("lifetime") == "300")
+
+---@return string
+local function arbitrary_str()
+	local s = ""
+	for _ = 1, math.random(10) do
+		s = s .. string.char(math.random(26) + 0x60)
+	end
+	return s
+end
+
+local function arbitrary_table()
+	local t = {}
+	for _ = 1, math.random(10) do
+		t[arbitrary_str()] = arbitrary_str()
+	end
+	return t
+end
+
+local function arbitrary_el(n)
+	local children = {}
+	if math.random(1, n) == n then
+		for _ = 1, math.random(5) do
+			table.insert(children, arbitrary_el(n * 2))
+		end
+	end
+	return nxml.new_element(arbitrary_str(), arbitrary_table(), children)
+end
+
+for _ = 1, 1000 do
+	local el = arbitrary_el(1)
+
+	assert(nxml.tostring(el, false) == nxml.to_string(el, false), "unpacked" .. nxml.to_string(el, false))
+	assert(nxml.tostring(el, true) == nxml.to_string(el, true), "packed" .. nxml.to_string(el, false))
+	assert(
+		nxml.tostring(el, false, "  ", "  ") == nxml.to_string(el, false, "  ", "  "),
+		"indented" .. nxml.to_string(el, false, "  ", "  ")
+	)
+end

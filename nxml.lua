@@ -1129,17 +1129,8 @@ function nxml.tostring(elem, packed, indent_char, cur_indent)
 	return s
 end
 
----New tostring function utilizing concat, do what you want with it
----@param elem element
----@param packed? bool
----@param indent_char str? \t
----@param cur_indent str? '""'
----@return str
-function nxml.to_string(elem, packed, indent_char, cur_indent)
-	local buffer = { "<" }
-
-	indent_char = indent_char or "\t"
-	cur_indent = cur_indent or ""
+local function to_string_internal(elem, packed, indent_char, cur_indent, buffer)
+	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
 
@@ -1176,7 +1167,7 @@ function nxml.to_string(elem, packed, indent_char, cur_indent)
 		if not packed then
 			buffer[#buffer + 1] = deeper_indent
 		end
-		buffer[#buffer + 1] = nxml.to_string(v, packed, indent_char, deeper_indent)
+		to_string_internal(v, packed, indent_char, deeper_indent, buffer)
 		if not packed then
 			buffer[#buffer + 1] = "\n"
 		end
@@ -1187,6 +1178,20 @@ function nxml.to_string(elem, packed, indent_char, cur_indent)
 	buffer[#buffer + 1] = elem.name
 	buffer[#buffer + 1] = ">"
 
+	return table.concat(buffer)
+end
+
+---New tostring function utilizing concat, do what you want with it
+---@param elem element
+---@param packed? bool
+---@param indent_char str? \t
+---@param cur_indent str? '""'
+---@return str
+function nxml.to_string(elem, packed, indent_char, cur_indent)
+	local buffer = {}
+	indent_char = indent_char or "\t"
+	cur_indent = cur_indent or ""
+	to_string_internal(elem, packed, indent_char, cur_indent, buffer)
 	return table.concat(buffer)
 end
 
