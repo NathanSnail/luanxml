@@ -89,7 +89,7 @@ local TOKENIZER_FUNCS = {}
 local TOKENIZER_MT = {
 	__index = TOKENIZER_FUNCS,
 	__tostring = function(_)
-		return "natif.nxml.tokenizer"
+		return "nxml::tokenizer"
 	end,
 }
 
@@ -323,7 +323,7 @@ local PARSER_FUNCS = {}
 local PARSER_MT = {
 	__index = PARSER_FUNCS,
 	__tostring = function(_)
-		return "natif.nxml.parser"
+		return "nxml::parser"
 	end,
 }
 
