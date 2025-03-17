@@ -1077,7 +1077,8 @@ function nxml.new_element(name, attrs, children)
 	return setmetatable(element, XML_ELEMENT_MT)
 end
 
-local function to_string_internal(elem, packed, indent_char, cur_indent, buffer)
+--TODO: this is slow for some reason, investigate
+local function to_string_internal_experimental(elem, packed, indent_char, cur_indent, buffer)
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
@@ -1115,7 +1116,60 @@ local function to_string_internal(elem, packed, indent_char, cur_indent, buffer)
 		if not packed then
 			buffer[#buffer + 1] = deeper_indent
 		end
-		to_string_internal(v, packed, indent_char, deeper_indent, buffer)
+		to_string_internal_experimental(v, packed, indent_char, deeper_indent, buffer)
+		if not packed then
+			buffer[#buffer + 1] = "\n"
+		end
+	end
+
+	buffer[#buffer + 1] = cur_indent
+	buffer[#buffer + 1] = "</"
+	buffer[#buffer + 1] = elem.name
+	buffer[#buffer + 1] = ">"
+
+	return table.concat(buffer)
+end
+
+local function to_string_internal(elem, packed, indent_char, cur_indent)
+	local buffer = {}
+	buffer[#buffer + 1] = "<"
+	buffer[#buffer + 1] = elem.name
+	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
+
+	for k, v in pairs(elem.attr) do
+		buffer[#buffer + 1] = " "
+		buffer[#buffer + 1] = k
+		buffer[#buffer + 1] = '="'
+		buffer[#buffer + 1] = attr_value_to_str(v)
+		buffer[#buffer + 1] = '"'
+	end
+
+	if self_closing then
+		buffer[#buffer + 1] = " />"
+		return table.concat(buffer)
+	end
+
+	buffer[#buffer + 1] = ">"
+
+	local deeper_indent = cur_indent .. indent_char
+
+	if elem.content and #elem.content ~= 0 then
+		if not packed then
+			buffer[#buffer + 1] = "\n"
+			buffer[#buffer + 1] = deeper_indent
+		end
+		buffer[#buffer + 1] = elem:text()
+	end
+
+	if not packed then
+		buffer[#buffer + 1] = "\n"
+	end
+
+	for _, v in ipairs(elem.children) do
+		if not packed then
+			buffer[#buffer + 1] = deeper_indent
+		end
+		buffer[#buffer + 1] = to_string_internal(v, packed, indent_char, deeper_indent)
 		if not packed then
 			buffer[#buffer + 1] = "\n"
 		end
@@ -1137,11 +1191,9 @@ end
 ---@param cur_indent str? '""'
 ---@return str
 function nxml.tostring(elem, packed, indent_char, cur_indent)
-	local buffer = {}
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
-	to_string_internal(elem, packed, indent_char, cur_indent, buffer)
-	return table.concat(buffer)
+	return to_string_internal(elem, packed, indent_char, cur_indent)
 end
 
 return nxml

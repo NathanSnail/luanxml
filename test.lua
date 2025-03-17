@@ -93,22 +93,30 @@ local function arbitrary_table()
 end
 
 local function arbitrary_el(n)
+	n = n or 1
 	local children = {}
-	if math.random(1, n) == n then
-		for _ = 1, math.random(5) do
+	if math.random(1, math.floor(n)) == math.floor(n) then
+		for _ = 1, math.random(20) do
 			table.insert(children, arbitrary_el(n * 2))
 		end
 	end
 	return nxml.new_element(arbitrary_str(), arbitrary_table(), children)
 end
 
-for _ = 1, 1000 do
+local sock = require("socket")
+--[[
+for _ = 1, 10 do
 	local el = arbitrary_el(1)
+	print(el)
+	local start = sock.gettime()
+	to_string_internal(el, false, "\t", "", {})
+	local fin = sock.gettime()
+	print(fin - start, "old")
 
-	assert(nxml.tostring(el, false) == nxml.tostring(el, false), "unpacked" .. nxml.tostring(el, false))
-	assert(nxml.tostring(el, true) == nxml.tostring(el, true), "packed" .. nxml.tostring(el, false))
-	assert(
-		nxml.tostring(el, false, "  ", "  ") == nxml.tostring(el, false, "  ", "  "),
-		"indented" .. nxml.tostring(el, false, "  ", "  ")
-	)
+	start = sock.gettime()
+	to_string_internal2(el, false, "\t", "")
+	fin = sock.gettime()
+	print(fin - start, "new")
 end
+]]
+print(arbitrary_el())
