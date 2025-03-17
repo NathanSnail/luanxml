@@ -105,10 +105,10 @@ end
 for _ = 1, 1000 do
 	local el = arbitrary_el(1)
 
-	assert(nxml.tostring(el, false) == nxml.to_string(el, false), "unpacked" .. nxml.to_string(el, false))
-	assert(nxml.tostring(el, true) == nxml.to_string(el, true), "packed" .. nxml.to_string(el, false))
+	assert(nxml.tostring(el, false) == nxml.tostring(el, false), "unpacked" .. nxml.tostring(el, false))
+	assert(nxml.tostring(el, true) == nxml.tostring(el, true), "packed" .. nxml.tostring(el, false))
 	assert(
-		nxml.tostring(el, false, "  ", "  ") == nxml.to_string(el, false, "  ", "  "),
-		"indented" .. nxml.to_string(el, false, "  ", "  ")
+		nxml.tostring(el, false, "  ", "  ") == nxml.tostring(el, false, "  ", "  "),
+		"indented" .. nxml.tostring(el, false, "  ", "  ")
 	)
 end
