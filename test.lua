@@ -96,7 +96,7 @@ local function arbitrary_el(n)
 	n = n or 1
 	local children = {}
 	if math.random(1, math.floor(n)) == math.floor(n) then
-		for _ = 1, math.random(20) do
+		for _ = 1, math.random(10) do
 			table.insert(children, arbitrary_el(n * 2))
 		end
 	end

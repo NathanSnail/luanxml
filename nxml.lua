@@ -848,14 +848,12 @@ end
 function XML_ELEMENT_FUNCS:nth_of(element_name, n)
 	---@cast self element
 	for k, v in ipairs(self.children) do
-		if v.name ~= element_name then
-			goto continue
+		if v.name == element_name then
+			n = n - 1
+			if n == 0 then
+				return v, k
+			end
 		end
-		n = n - 1
-		if n == 0 then
-			return v, k
-		end
-		::continue::
 	end
 end
 
