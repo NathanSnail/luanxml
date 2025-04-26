@@ -119,4 +119,11 @@ for _ = 1, 10 do
 	print(fin - start, "new")
 end
 ]]
-print(arbitrary_el())
+-- print(arbitrary_el())
+arbitrary_el()
+
+write("test.xml", [[<Entity name="fish"/>]])
+for content in nxml.edit_file("test.xml", read, write) do
+	content:set("name", "banana")
+end
+assert(nxml.parse(read("test.xml") or ""):get("name") == "banana")
