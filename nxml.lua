@@ -708,6 +708,8 @@ function XML_ELEMENT_FUNCS:text()
 	return text
 end
 
+---If you want to construct a new element and immediately add it use `:create_child`.
+---This is useful for moving children around in the tree.
 ---Returns `self` for chaining purposes.
 ---@param child element
 ---@return element self
@@ -729,10 +731,10 @@ function XML_ELEMENT_FUNCS:add_children(children)
 end
 
 ---Creates a new element and adds it as a child to this element.
----Convenience function that combines xml:add_child with nxml.new_element.
+---Convenience function that combines `xml:add_child` with `nxml.new_element`.
 ---
 ---Example usage:
----```
+---```lua
 --- elem:create_child("LifetimeComponent", { lifetime = 30 })
 ---```
 ---@param name str
@@ -749,7 +751,7 @@ end
 ---Convenience function that combines xml:add_children with nxml.new_element.
 ---
 ---Example usage:
----```
+---```lua
 ---	elem:create_children(
 ---		{ AbilityComponent = {
 ---			ui_name = "$item_jar_with_mat"
