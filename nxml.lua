@@ -1130,14 +1130,24 @@ local function to_string_internal_experimental(elem, packed, indent_char, cur_in
 	return table.concat(buffer)
 end
 
+---@param elem element
+---@param packed bool
+---@param indent_char string
+---@param cur_indent string
+---@return string
 local function to_string_internal(elem, packed, indent_char, cur_indent)
+	-- using a string builder significantly improves performance
 	local buffer = {}
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
 
+	local first = true
 	for k, v in pairs(elem.attr) do
-		buffer[#buffer + 1] = " "
+		if not packed or first then
+			buffer[#buffer + 1] = " "
+			first = false
+		end
 		buffer[#buffer + 1] = k
 		buffer[#buffer + 1] = '="'
 		buffer[#buffer + 1] = attr_value_to_str(v)
@@ -1145,7 +1155,7 @@ local function to_string_internal(elem, packed, indent_char, cur_indent)
 	end
 
 	if self_closing then
-		buffer[#buffer + 1] = " />"
+		buffer[#buffer + 1] = packed and "/>" or " />"
 		return table.concat(buffer)
 	end
 
@@ -1186,14 +1196,14 @@ end
 ---Generally you should do tostring(elem) instead of calling this function.
 ---This function is just how it's implemented and is exposed for more customisation.
 ---@param elem element
----@param packed? bool
----@param indent_char str? \t
----@param cur_indent str? '""'
+---@param packed? bool `false` the string representation of the xml will be minimal if true
+---@param indent_char str? `"\t"`
+---@param cur_indent str? `""` the current level of indentation, you probably don't want to change this
 ---@return str
 function nxml.tostring(elem, packed, indent_char, cur_indent)
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
-	return to_string_internal(elem, packed, indent_char, cur_indent)
+	return to_string_internal(elem, packed or false, indent_char, cur_indent)
 end
 
 return nxml

@@ -1,4 +1,11 @@
 local nxml = require("nxml")
+
+---@param a string?
+---@param b string?
+local function assert_eq(a, b)
+	assert(a == b, ("%s == %s"):format(a, b))
+end
+
 local tree = nxml.parse(
 	[[<Entity name="hi"> <LuaComponent script_source_file="hamis_code.lua"> </LuaComponent> <DamageModelComponent hp="9999"> </DamageModelComponent> </Entity>]]
 )
@@ -126,4 +133,8 @@ write("test.xml", [[<Entity name="fish"/>]])
 for content in nxml.edit_file("test.xml", read, write) do
 	content:set("name", "banana")
 end
-assert(nxml.parse(read("test.xml") or ""):get("name") == "banana")
+assert_eq(nxml.parse(read("test.xml") or ""):get("name"), "banana")
+assert_eq(
+	nxml.tostring(nxml.parse('<Foo a="2" b="3"> <Bar c="3" d="4" /> </Foo>'), true),
+	'<Foo a="2"b="3"><Bar c="3"d="4"/></Foo>'
+)
