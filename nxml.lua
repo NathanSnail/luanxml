@@ -406,6 +406,8 @@ end
 ---@return element?
 function PARSER_FUNCS:parse_element(skip_opening_tag)
 	---@cast self parser
+
+	---@type token?
 	local tok
 	if not skip_opening_tag then
 		tok = self.tok:next_token()
@@ -566,6 +568,7 @@ end
 ---@param base_file element
 local function merge_xml(root, base_element, base_file)
 	local index = 1
+	---@type table<string, integer>
 	local counts = {}
 	for elem in base_file:each_child() do
 		if not counts[elem.name] then
@@ -590,11 +593,12 @@ local function merge_xml(root, base_element, base_file)
 		elseif attr_name == "tags" then
 			local tags = root:get("tags") .. "," .. attr_value
 			local tag_list = {}
+			---@type table<string, boolean>
 			local tag_table = {}
 			for tag in tags:gmatch("([^,]+)") do
 				if tag ~= "" and not tag_table[tag] then
 					table.insert(tag_list, tag)
-					tag_table[tag] = 1
+					tag_table[tag] = true
 				end
 			end
 			tags = table.concat(tag_list, ",")
@@ -632,6 +636,7 @@ function XML_ELEMENT_FUNCS:expand_base(read, exists)
 	-- thanks Kaedenn for writing this!
 	read = read or ModTextFileGetContent
 	exists = exists or ModDoesFileExist
+	---@type element?
 	local base_tag
 	while true do
 		base_tag = self:first_of("Base")
@@ -890,13 +895,14 @@ end
 ---@return element[]
 function XML_ELEMENT_FUNCS:all_of(element_name)
 	---@cast self element
-	local table = {}
+	---@type element[]
+	local all = {}
 	local i = 1
 	for elem in self:each_of(element_name) do
-		table[i] = elem
+		all[i] = elem
 		i = i + 1
 	end
-	return table
+	return all
 end
 
 ---Iterate over each child of the xml element, use like:
@@ -958,6 +964,7 @@ function XML_ELEMENT_FUNCS:clone()
 	for e in self:each_child() do
 		table.insert(children, e:clone())
 	end
+	---@type table<string, string>
 	local attr = {}
 	for k, v in pairs(self.attr) do
 		attr[k] = v
@@ -1060,6 +1067,7 @@ end
 ---@param children element[]? {}
 ---@return element
 function nxml.new_element(name, attrs, children)
+	---@type table<string, string>
 	local attr = {}
 	attrs = attrs or {}
 	for k, v in pairs(attrs) do
@@ -1078,6 +1086,13 @@ function nxml.new_element(name, attrs, children)
 end
 
 --TODO: this is slow for some reason, investigate
+
+---@param elem element
+---@param packed boolean
+---@param indent_char string
+---@param cur_indent string
+---@param buffer string[]
+---@return string
 local function to_string_internal_experimental(elem, packed, indent_char, cur_indent, buffer)
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
@@ -1137,6 +1152,7 @@ end
 ---@return string
 local function to_string_internal(elem, packed, indent_char, cur_indent)
 	-- using a string builder significantly improves performance
+	---@type string[]
 	local buffer = {}
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name

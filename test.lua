@@ -92,6 +92,7 @@ local function arbitrary_str()
 end
 
 local function arbitrary_table()
+	---@type table<string, string>
 	local t = {}
 	for _ = 1, math.random(10) do
 		t[arbitrary_str()] = arbitrary_str()
@@ -110,8 +111,10 @@ local function arbitrary_el(n)
 	return nxml.new_element(arbitrary_str(), arbitrary_table(), children)
 end
 
-local sock = require("socket")
 --[[
+---@type any
+local sock = require("socket")
+
 for _ = 1, 10 do
 	local el = arbitrary_el(1)
 	print(el)
