@@ -204,6 +204,7 @@ function TOKENIZER_FUNCS:cur_char()
 	return str_index(self.data, self.cur_idx)
 end
 
+---Advance until the next semantically relevant token
 function TOKENIZER_FUNCS:skip_whitespace()
 	while not self:eof() do
 		if self:is_whitespace(self:cur_char()) then
@@ -326,6 +327,12 @@ local PARSER_MT = {
 		return "nxml::parser"
 	end,
 }
+---@param type error_type
+---@param msg string
+
+local function default_error_reporter(type, msg)
+	print("parser error: [" .. type .. "] " .. msg)
+end
 
 ---@param tokenizer tokenizer
 ---@param error_reporter fun(type: error_type, msg: str)?
@@ -335,9 +342,7 @@ local function new_parser(tokenizer, error_reporter)
 	local parser = {
 		tok = tokenizer,
 		errors = {},
-		error_reporter = error_reporter or function(type, msg)
-			print("parser error: [" .. type .. "] " .. msg)
-		end,
+		error_reporter = error_reporter or default_error_reporter,
 	}
 	-- why does luals not care about here?
 	return setmetatable(parser, PARSER_MT)

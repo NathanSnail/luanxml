@@ -91,6 +91,7 @@ local function arbitrary_str()
 	return s
 end
 
+---@return table<string, string>
 local function arbitrary_table()
 	---@type table<string, string>
 	local t = {}
@@ -100,6 +101,8 @@ local function arbitrary_table()
 	return t
 end
 
+---@param n integer? 1
+---@return element
 local function arbitrary_el(n)
 	n = n or 1
 	local children = {}
