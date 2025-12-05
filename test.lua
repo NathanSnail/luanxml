@@ -3,7 +3,20 @@ local nxml = require("nxml")
 ---@param a string?
 ---@param b string?
 local function assert_eq(a, b)
-	assert(a == b, ("%s == %s"):format(a, b))
+	assert(a == b, ("'%s' == '%s'"):format(a, b))
+end
+
+---@param a string?
+---@param valid table<string, true>
+local function assert_contained(a, valid)
+	local s = "{"
+	for k, _ in pairs(valid) do
+		s = s .. "'" .. k .. "', "
+		if a == k then
+			return
+		end
+	end
+	assert(false, ("'%s' ∈ %s}"):format(a, s))
 end
 
 local tree = nxml.parse(
@@ -140,7 +153,10 @@ for content in nxml.edit_file("test.xml", read, write) do
 	content:set("name", "banana")
 end
 assert_eq(nxml.parse(read("test.xml") or ""):get("name"), "banana")
-assert_eq(
-	nxml.tostring(nxml.parse('<Foo a="2" b="3"> <Bar c="3" d="4" /> </Foo>'), true),
-	'<Foo a="2"b="3"><Bar c="3"d="4"/></Foo>'
-)
+local valid = {
+	['<Foo a="2"b="3"><Bar c="3"d="4"/></Foo>'] = true,
+	--['<Foo b="3"a="2"><Bar c="3"d="4"/></Foo>'] = true,
+	['<Foo a="2"b="3"><Bar d="4"c="3"/></Foo>'] = true,
+	['<Foo b="3"a="2"><Bar d="4"c="3"/></Foo>'] = true,
+}
+assert_contained(nxml.tostring(nxml.parse('<Foo a="2" b="3"> <Bar c="3" d="4" /> </Foo>'), true), valid)
