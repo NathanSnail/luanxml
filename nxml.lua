@@ -176,19 +176,6 @@ function TOKENIZER_FUNCS:peek(n)
 	return str_index(self.data, idx)
 end
 
----@param str str
----@return boolean
-function TOKENIZER_FUNCS:match_string(str)
-	local len = #str
-
-	for i = 0, len - 1 do
-		if self:peek(i) ~= str_index(str, i) then
-			return false
-		end
-	end
-	return true
-end
-
 ---@return bool
 function TOKENIZER_FUNCS:eof()
 	---@cast self tokenizer
@@ -204,34 +191,54 @@ function TOKENIZER_FUNCS:cur_char()
 	return str_index(self.data, self.cur_idx)
 end
 
+local C_NULL = 0
+local C_LT = string.byte("<")
+local C_GT = string.byte(">")
+local C_SLASH = string.byte("/")
+local C_EQ = string.byte("=")
+local C_QUOTE = string.byte('"')
+local C_BANG = string.byte("!")
+local C_DASH = string.byte("-")
+local C_QMARK = string.byte("?")
+
 ---Advance until the next semantically relevant token
 function TOKENIZER_FUNCS:skip_whitespace()
-	while not self:eof() do
-		if self:is_whitespace(self:cur_char()) then
+	---@cast self tokenizer
+	local data = self.data
+	local len = self.len
+
+	while self.cur_idx < len do
+		local c = str_index(data, self.cur_idx)
+
+		if ws[c] then
 			self:move()
-		elseif self:match_string("<!--") then
+		-- <!-- comment -->
+		elseif c == C_LT and self:peek(1) == C_BANG and self:peek(2) == C_DASH and self:peek(3) == C_DASH then
 			self:move(4)
-			while not self:eof() and not self:match_string("-->") do
+			while
+				self.cur_idx < len and not (self:peek(0) == C_DASH and self:peek(1) == C_DASH and self:peek(2) == C_GT)
+			do
 				self:move()
 			end
-
-			if self:match_string("-->") then
+			if self:peek(0) == C_DASH then
 				self:move(3)
 			end
-		elseif self:cur_char() == string.byte("<") and self:peek(1) == string.byte("!") then
+		-- <!DOCTYPE ...> or similar
+		elseif c == C_LT and self:peek(1) == C_BANG then
 			self:move(2)
-			while not self:eof() and self:cur_char() ~= string.byte(">") do
+			while self.cur_idx < len and self:cur_char() ~= C_GT do
 				self:move()
 			end
-			if self:cur_char() == string.byte(">") then
+			if self:cur_char() == C_GT then
 				self:move()
 			end
-		elseif self:match_string("<?") then
+		-- <?xml ... ?>
+		elseif c == C_LT and self:peek(1) == C_QMARK then
 			self:move(2)
-			while not self:eof() and not self:match_string("?>") do
+			while self.cur_idx < len and not (self:peek(0) == C_QMARK and self:peek(1) == C_GT) do
 				self:move()
 			end
-			if self:match_string("?>") then
+			if self:peek(0) == C_QMARK then
 				self:move(2)
 			end
 		else
@@ -268,13 +275,6 @@ function TOKENIZER_FUNCS:read_unquoted_string()
 
 	return str_sub(self.data, start_idx, len)
 end
-
-local C_NULL = 0
-local C_LT = string.byte("<")
-local C_GT = string.byte(">")
-local C_SLASH = string.byte("/")
-local C_EQ = string.byte("=")
-local C_QUOTE = string.byte('"')
 
 ---@return token?
 function TOKENIZER_FUNCS:next_token()
