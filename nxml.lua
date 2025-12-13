@@ -130,13 +130,6 @@ local ws = {
 	[string.byte("\r")] = true,
 }
 
----@param char int
----@return bool
-function TOKENIZER_FUNCS:is_whitespace(char)
-	local n = tonumber(char)
-	return ws[n] or false
-end
-
 ---@type table<int, bool>
 local punct = {
 	[C_LT] = true,
@@ -148,10 +141,7 @@ local punct = {
 ---@param char int
 ---@return bool
 function TOKENIZER_FUNCS:is_whitespace_or_punctuation(char)
-	local n = tonumber(char)
-	-- We can disable here because is_whitespace(!int) -> false
-	---@diagnostic disable-next-line: param-type-mismatch
-	return self:is_whitespace(n) or punct[n] or false
+	return ws[char] or punct[char] or false
 end
 
 ---@param n int? 1
