@@ -111,11 +111,22 @@ local function new_tokenizer(cstring)
 	return setmetatable(tokenizer, TOKENIZER_MT)
 end
 
+local C_NULL = 0
+local C_LT = string.byte("<")
+local C_GT = string.byte(">")
+local C_SLASH = string.byte("/")
+local C_EQ = string.byte("=")
+local C_QUOTE = string.byte('"')
+local C_BANG = string.byte("!")
+local C_DASH = string.byte("-")
+local C_QMARK = string.byte("?")
+local C_NL = string.byte("\n")
+
 ---@type table<int, bool>
 local ws = {
 	[string.byte(" ")] = true,
 	[string.byte("\t")] = true,
-	[string.byte("\n")] = true,
+	[C_NL] = true,
 	[string.byte("\r")] = true,
 }
 
@@ -128,10 +139,10 @@ end
 
 ---@type table<int, bool>
 local punct = {
-	[string.byte("<")] = true,
-	[string.byte(">")] = true,
-	[string.byte("=")] = true,
-	[string.byte("/")] = true,
+	[C_LT] = true,
+	[C_GT] = true,
+	[C_EQ] = true,
+	[C_SLASH] = true,
 }
 
 ---@param char int
@@ -147,14 +158,23 @@ end
 function TOKENIZER_FUNCS:move(n)
 	---@cast self tokenizer
 	n = n or 1
-	local prev_idx = self.cur_idx
-	self.cur_idx = self.cur_idx + n
-	if self.cur_idx >= self.len then
-		self.cur_idx = self.len
+	if n == 1 then
+		local c = str_index(self.data, self.cur_idx)
+		self.cur_idx = self.cur_idx + 1
+		if c == C_NL then
+			self.cur_row = self.cur_row + 1
+			self.cur_col = 1
+		else
+			self.cur_col = self.cur_col + 1
+		end
 		return
 	end
+
+	-- fallback slow path for n > 1
+	local prev_idx = self.cur_idx
+	self.cur_idx = math.min(self.cur_idx + n, self.len)
 	for i = prev_idx, self.cur_idx - 1 do
-		if str_index(self.data, i) == string.byte("\n") then
+		if str_index(self.data, i) == C_NL then
 			self.cur_row = self.cur_row + 1
 			self.cur_col = 1
 		else
@@ -190,16 +210,6 @@ function TOKENIZER_FUNCS:cur_char()
 	end
 	return str_index(self.data, self.cur_idx)
 end
-
-local C_NULL = 0
-local C_LT = string.byte("<")
-local C_GT = string.byte(">")
-local C_SLASH = string.byte("/")
-local C_EQ = string.byte("=")
-local C_QUOTE = string.byte('"')
-local C_BANG = string.byte("!")
-local C_DASH = string.byte("-")
-local C_QMARK = string.byte("?")
 
 ---Advance until the next semantically relevant token
 function TOKENIZER_FUNCS:skip_whitespace()
