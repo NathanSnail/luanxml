@@ -76,7 +76,7 @@ end
 ---@param idx int
 ---@return integer
 local function str_index(str, idx)
-	return string.byte(str:sub(idx + 1, idx + 1))
+	return string.byte(str, idx + 1)
 end
 
 ---@class nxml
