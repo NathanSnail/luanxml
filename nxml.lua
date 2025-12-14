@@ -1090,15 +1090,12 @@ function nxml.new_element(name, attrs, children)
 	return setmetatable(element, XML_ELEMENT_MT)
 end
 
---TODO: this is slow for some reason, investigate
-
 ---@param elem element
 ---@param packed boolean
 ---@param indent_char string
 ---@param cur_indent string
 ---@param buffer string[]
----@return string
-local function to_string_internal_experimental(elem, packed, indent_char, cur_indent, buffer)
+local function to_string_internal_experimental_impl(elem, packed, indent_char, cur_indent, buffer)
 	buffer[#buffer + 1] = "<"
 	buffer[#buffer + 1] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
@@ -1113,7 +1110,7 @@ local function to_string_internal_experimental(elem, packed, indent_char, cur_in
 
 	if self_closing then
 		buffer[#buffer + 1] = " />"
-		return table.concat(buffer)
+		return
 	end
 
 	buffer[#buffer + 1] = ">"
@@ -1136,7 +1133,7 @@ local function to_string_internal_experimental(elem, packed, indent_char, cur_in
 		if not packed then
 			buffer[#buffer + 1] = deeper_indent
 		end
-		to_string_internal_experimental(v, packed, indent_char, deeper_indent, buffer)
+		to_string_internal_experimental_impl(v, packed, indent_char, deeper_indent, buffer)
 		if not packed then
 			buffer[#buffer + 1] = "\n"
 		end
@@ -1146,7 +1143,16 @@ local function to_string_internal_experimental(elem, packed, indent_char, cur_in
 	buffer[#buffer + 1] = "</"
 	buffer[#buffer + 1] = elem.name
 	buffer[#buffer + 1] = ">"
+end
 
+---@param elem element
+---@param packed bool
+---@param indent_char string
+---@param cur_indent string
+---@return string
+local function to_string_internal_experimental(elem, packed, indent_char, cur_indent)
+	local buffer = {}
+	to_string_internal_experimental_impl(elem, packed, indent_char, cur_indent, buffer)
 	return table.concat(buffer)
 end
 
@@ -1224,7 +1230,8 @@ end
 function nxml.tostring(elem, packed, indent_char, cur_indent)
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
-	return to_string_internal(elem, packed or false, indent_char, cur_indent)
+	return to_string_internal_experimental(elem, packed or false, indent_char, cur_indent)
+	-- return to_string_internal(elem, packed or false, indent_char, cur_indent)
 end
 
 return nxml
