@@ -1100,8 +1100,12 @@ local function to_string_internal_experimental_impl(elem, packed, indent_char, c
 	buffer[#buffer + 1] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
 
+	local first = true
 	for k, v in pairs(elem.attr) do
-		buffer[#buffer + 1] = " "
+		if not packed or first then
+			buffer[#buffer + 1] = " "
+			first = false
+		end
 		buffer[#buffer + 1] = k
 		buffer[#buffer + 1] = '="'
 		buffer[#buffer + 1] = attr_value_to_str(v)
@@ -1109,7 +1113,11 @@ local function to_string_internal_experimental_impl(elem, packed, indent_char, c
 	end
 
 	if self_closing then
-		buffer[#buffer + 1] = " />"
+		if packed then
+			buffer[#buffer + 1] = "/>"
+		else
+			buffer[#buffer + 1] = " />"
+		end
 		return
 	end
 
@@ -1153,70 +1161,6 @@ end
 local function to_string_internal_experimental(elem, packed, indent_char, cur_indent)
 	local buffer = {}
 	to_string_internal_experimental_impl(elem, packed, indent_char, cur_indent, buffer)
-	return table.concat(buffer)
-end
-
----@param elem element
----@param packed bool
----@param indent_char string
----@param cur_indent string
----@return string
-local function to_string_internal(elem, packed, indent_char, cur_indent)
-	-- using a string builder significantly improves performance
-	---@type string[]
-	local buffer = {}
-	buffer[#buffer + 1] = "<"
-	buffer[#buffer + 1] = elem.name
-	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
-
-	local first = true
-	for k, v in pairs(elem.attr) do
-		if not packed or first then
-			buffer[#buffer + 1] = " "
-			first = false
-		end
-		buffer[#buffer + 1] = k
-		buffer[#buffer + 1] = '="'
-		buffer[#buffer + 1] = attr_value_to_str(v)
-		buffer[#buffer + 1] = '"'
-	end
-
-	if self_closing then
-		buffer[#buffer + 1] = packed and "/>" or " />"
-		return table.concat(buffer)
-	end
-
-	buffer[#buffer + 1] = ">"
-
-	local deeper_indent = cur_indent .. indent_char
-
-	if elem.content and #elem.content ~= 0 then
-		if not packed then
-			buffer[#buffer + 1] = "\n"
-			buffer[#buffer + 1] = deeper_indent
-		end
-		buffer[#buffer + 1] = elem:text()
-	end
-
-	if not packed then
-		buffer[#buffer + 1] = "\n"
-	end
-
-	for _, v in ipairs(elem.children) do
-		if not packed then
-			buffer[#buffer + 1] = deeper_indent
-		end
-		buffer[#buffer + 1] = to_string_internal(v, packed, indent_char, deeper_indent)
-		if not packed then
-			buffer[#buffer + 1] = "\n"
-		end
-	end
-
-	buffer[#buffer + 1] = cur_indent
-	buffer[#buffer + 1] = "</"
-	buffer[#buffer + 1] = elem.name
-	buffer[#buffer + 1] = ">"
-
 	return table.concat(buffer)
 end
 
