@@ -327,9 +327,9 @@ local PARSER_MT = {
 		return "nxml::parser"
 	end,
 }
+
 ---@param type error_type
 ---@param msg string
-
 local function default_error_reporter(type, msg)
 	print("parser error: [" .. type .. "] " .. msg)
 end
