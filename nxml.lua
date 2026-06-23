@@ -46,11 +46,9 @@
 ---@class (exact) tokenizer: tokenizer_funcs
 ---@field data str
 ---@field cur_idx int
----@field cur_row int
----@field cur_col int
----@field prev_row int
----@field prev_col int
+---@field prev_idx int byte index where the current token started (used for error positions)
 ---@field len int
+---@field string_token token reused table for string tokens, to avoid a per-token allocation
 
 ---@class (exact) parser: parser_funcs
 ---@field tok tokenizer
@@ -64,19 +62,22 @@
 ---@field name str
 ---@field errors error[]
 
+local s_byte = string.byte
+local s_sub = string.sub
+
 ---@param str str
 ---@param start_idx int
 ---@param len int
 ---@return str
 local function str_sub(str, start_idx, len)
-	return str:sub(start_idx + 1, start_idx + len)
+	return s_sub(str, start_idx + 1, start_idx + len)
 end
 
 ---@param str str
 ---@param idx int
 ---@return integer
 local function str_index(str, idx)
-	return string.byte(str, idx + 1)
+	return s_byte(str, idx + 1)
 end
 
 ---@class nxml
@@ -100,11 +101,9 @@ local function new_tokenizer(cstring)
 	local tokenizer = {
 		data = cstring,
 		cur_idx = 0,
-		cur_row = 1,
-		cur_col = 1,
-		prev_row = 1,
-		prev_col = 1,
+		prev_idx = 0,
 		len = #cstring,
+		string_token = { type = "string", value = nil },
 	}
 	-- idk why luals doesn't like this
 	---@diagnostic disable-next-line: return-type-mismatch
@@ -122,6 +121,12 @@ local C_DASH = string.byte("-")
 local C_QMARK = string.byte("?")
 local C_NL = string.byte("\n")
 
+-- Same table can be returned for every "<", ">", "/", "=" instead of allocating a fresh one per token.
+local TOK_LT = { type = "<" }
+local TOK_GT = { type = ">" }
+local TOK_SLASH = { type = "/" }
+local TOK_EQ = { type = "=" }
+
 ---@type table<int, bool>
 local ws = {
 	[string.byte(" ")] = true,
@@ -138,183 +143,167 @@ local punct = {
 	[C_SLASH] = true,
 }
 
----@param char int
----@return bool
-function TOKENIZER_FUNCS:is_whitespace_or_punctuation(char)
-	return ws[char] or punct[char] or false
+---Byte-indexed delimiter table (whitespace + punctuation).
+---@type table<int, bool>
+local delim = {}
+for i = 0, 255 do
+	delim[i] = false
+end
+for k in pairs(ws) do
+	delim[k] = true
+end
+for k in pairs(punct) do
+	delim[k] = true
 end
 
----@param n int? 1
-function TOKENIZER_FUNCS:move(n)
-	---@cast self tokenizer
-	n = n or 1
-	if n == 1 then
-		local c = str_index(self.data, self.cur_idx)
-		self.cur_idx = self.cur_idx + 1
-		if c == C_NL then
-			self.cur_row = self.cur_row + 1
-			self.cur_col = 1
-		else
-			self.cur_col = self.cur_col + 1
-		end
-		return
-	end
-
-	-- fallback slow path for n > 1
-	local prev_idx = self.cur_idx
-	self.cur_idx = math.min(self.cur_idx + n, self.len)
-	for i = prev_idx, self.cur_idx - 1 do
-		if str_index(self.data, i) == C_NL then
-			self.cur_row = self.cur_row + 1
-			self.cur_col = 1
-		else
-			self.cur_col = self.cur_col + 1
-		end
-	end
+---Advance a single character.
+---@param self tokenizer
+local function tokenizer_move(self)
+	self.cur_idx = self.cur_idx + 1
 end
 
----@param n int? 1
+---@param self tokenizer
 ---@return int
-function TOKENIZER_FUNCS:peek(n)
-	---@cast self tokenizer
-	n = n or 1
-	local idx = self.cur_idx + n
-	if idx >= self.len then
+local function tokenizer_cur_char(self)
+	local i = self.cur_idx
+	if i >= self.len then
 		return 0
 	end
-
-	return str_index(self.data, idx)
+	return str_index(self.data, i)
 end
 
----@return bool
-function TOKENIZER_FUNCS:eof()
+---Compute the 1-based row and column of the current token's start.
+---@return int row
+---@return int col
+function TOKENIZER_FUNCS:prev_position()
 	---@cast self tokenizer
-	return self.cur_idx >= self.len
-end
-
----@return int
-function TOKENIZER_FUNCS:cur_char()
-	---@cast self tokenizer
-	if self:eof() then
-		return 0
+	local data = self.data
+	local target = self.prev_idx
+	local row = 1
+	local last_newline = -1
+	for i = 0, target - 1 do
+		if str_index(data, i) == C_NL then
+			row = row + 1
+			last_newline = i
+		end
 	end
-	return str_index(self.data, self.cur_idx)
+	return row, target - last_newline
 end
 
 ---Advance until the next semantically relevant token
-function TOKENIZER_FUNCS:skip_whitespace()
-	---@cast self tokenizer
+---@param self tokenizer
+local function tokenizer_skip_whitespace(self)
 	local data = self.data
 	local len = self.len
-
-	while self.cur_idx < len do
-		local c = str_index(data, self.cur_idx)
-
+	local i = self.cur_idx
+	while i < len do
+		local c = str_index(data, i)
 		if ws[c] then
-			self:move()
-		-- <!-- comment -->
-		elseif c == C_LT and self:peek(1) == C_BANG and self:peek(2) == C_DASH and self:peek(3) == C_DASH then
-			self:move(4)
-			while
-				self.cur_idx < len and not (self:peek(0) == C_DASH and self:peek(1) == C_DASH and self:peek(2) == C_GT)
-			do
-				self:move()
-			end
-			if self:peek(0) == C_DASH then
-				self:move(3)
-			end
-		-- <!DOCTYPE ...> or similar
-		elseif c == C_LT and self:peek(1) == C_BANG then
-			self:move(2)
-			while self.cur_idx < len and self:cur_char() ~= C_GT do
-				self:move()
-			end
-			if self:cur_char() == C_GT then
-				self:move()
-			end
-		-- <?xml ... ?>
-		elseif c == C_LT and self:peek(1) == C_QMARK then
-			self:move(2)
-			while self.cur_idx < len and not (self:peek(0) == C_QMARK and self:peek(1) == C_GT) do
-				self:move()
-			end
-			if self:peek(0) == C_QMARK then
-				self:move(2)
+			i = i + 1
+		elseif c == C_LT then
+			local c1 = str_index(data, i + 1)
+			if c1 == C_BANG then
+				if str_index(data, i + 2) == C_DASH and str_index(data, i + 3) == C_DASH then
+					-- <!-- comment -->
+					i = i + 4
+					while
+						i < len
+						and not (
+							str_index(data, i) == C_DASH
+							and str_index(data, i + 1) == C_DASH
+							and str_index(data, i + 2) == C_GT
+						)
+					do
+						i = i + 1
+					end
+					i = i + 3
+				else
+					-- <!DOCTYPE ...> or similar
+					i = i + 2
+					while i < len and str_index(data, i) ~= C_GT do
+						i = i + 1
+					end
+					i = i + 1
+				end
+			elseif c1 == C_QMARK then
+				-- <?xml ... ?>
+				i = i + 2
+				while i < len and not (str_index(data, i) == C_QMARK and str_index(data, i + 1) == C_GT) do
+					i = i + 1
+				end
+				i = i + 2
+			else
+				break
 			end
 		else
 			break
 		end
 	end
+	self.cur_idx = i
 end
 
+---Read a double-quoted string, starting just after the opening quote.
+---@param self tokenizer
 ---@return str
-function TOKENIZER_FUNCS:read_quoted_string()
-	---@cast self tokenizer
+local function tokenizer_read_quoted_string(self)
+	local data = self.data
+	local len = self.len
 	local start_idx = self.cur_idx
-	local len = 0
-
-	while not self:eof() and self:cur_char() ~= string.byte('"') do
-		len = len + 1
-		self:move()
+	local i = start_idx
+	while i < len and str_index(data, i) ~= C_QUOTE do
+		i = i + 1
 	end
-
-	self:move() -- skip "
-	return str_sub(self.data, start_idx, len)
+	self.cur_idx = i + 1 -- skip closing quote
+	return str_sub(data, start_idx, i - start_idx)
 end
 
+---Read a bare token up to the next whitespace or punctuation byte.
+---@param self tokenizer
 ---@return str
-function TOKENIZER_FUNCS:read_unquoted_string()
-	---@cast self tokenizer
-	local start_idx = self.cur_idx - 1 -- first char is move()d
-	local len = 1
-
-	while not self:eof() and not self:is_whitespace_or_punctuation(self:cur_char()) do
-		len = len + 1
-		self:move()
+local function tokenizer_read_unquoted_string(self)
+	local data = self.data
+	local len = self.len
+	local start_idx = self.cur_idx - 1 -- first char already consumed by next_token
+	local i = self.cur_idx
+	while i < len do
+		if delim[str_index(data, i)] then
+			break
+		end
+		i = i + 1
 	end
-
-	return str_sub(self.data, start_idx, len)
+	self.cur_idx = i
+	return str_sub(data, start_idx, i - start_idx)
 end
 
+---@param self tokenizer
 ---@return token?
-function TOKENIZER_FUNCS:next_token()
-	self:skip_whitespace()
-
-	self.prev_row = self.cur_row
-	self.prev_col = self.cur_col
-
-	if self:eof() then
+local function tokenizer_next_token(self)
+	tokenizer_skip_whitespace(self)
+	self.prev_idx = self.cur_idx
+	if self.cur_idx >= self.len then
 		return nil
 	end
 
-	local c = self:cur_char()
-	self:move()
+	local c = str_index(self.data, self.cur_idx)
+	self.cur_idx = self.cur_idx + 1
 
 	if c == C_NULL then
 		return nil
 	elseif c == C_LT then
-		---@type token
-		local v = { type = "<" }
-		return v
+		return TOK_LT
 	elseif c == C_GT then
-		---@type token
-		local v = { type = ">" }
-		return v
+		return TOK_GT
 	elseif c == C_SLASH then
-		---@type token
-		local v = { type = "/" }
-		return v
+		return TOK_SLASH
 	elseif c == C_EQ then
-		---@type token
-		local v = { type = "=" }
-		return v
+		return TOK_EQ
 	elseif c == C_QUOTE then
-		---@type token
-		local v = { type = "string", value = self:read_quoted_string() }
+		local v = self.string_token
+		v.value = tokenizer_read_quoted_string(self)
 		return v
 	else
-		---@type token
-		local v = { type = "string", value = self:read_unquoted_string() }
+		local v = self.string_token
+		v.value = tokenizer_read_unquoted_string(self)
 		return v
 	end
 end
@@ -327,9 +316,9 @@ local PARSER_MT = {
 		return "nxml::parser"
 	end,
 }
+
 ---@param type error_type
 ---@param msg string
-
 local function default_error_reporter(type, msg)
 	print("parser error: [" .. type .. "] " .. msg)
 end
@@ -362,8 +351,9 @@ local XML_ELEMENT_MT = {
 function PARSER_FUNCS:report_error(type, msg)
 	---@cast self parser
 	self.error_reporter(type, msg)
+	local row, col = self.tok:prev_position()
 	---@type error
-	local error = { type = type, msg = msg, row = self.tok.prev_row, col = self.tok.prev_col }
+	local error = { type = type, msg = msg, row = row, col = col }
 	table.insert(self.errors, error)
 end
 
@@ -371,13 +361,13 @@ end
 ---@param name str
 function PARSER_FUNCS:parse_attr(attr_table, name)
 	---@cast self parser
-	local tok = self.tok:next_token()
+	local tok = tokenizer_next_token(self.tok)
 	if not tok then
 		self:report_error("missing_token", string.format("parsing attribute '%s' - did not find a token", name))
 		return
 	end
 	if tok.type == "=" then
-		tok = self.tok:next_token()
+		tok = tokenizer_next_token(self.tok)
 
 		if not tok then
 			self:report_error("missing_token", string.format("parsing attribute '%s' - did not find a token", name))
@@ -415,7 +405,7 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 	---@type token?
 	local tok
 	if not skip_opening_tag then
-		tok = self.tok:next_token()
+		tok = tokenizer_next_token(self.tok)
 		if not tok then
 			self:report_error("missing_token", "parsing element - did not find a token")
 			return
@@ -425,7 +415,7 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 		end
 	end
 
-	tok = self.tok:next_token()
+	tok = tokenizer_next_token(self.tok)
 	if not tok then
 		self:report_error("missing_token", "parsing element - did not find a token")
 		return
@@ -445,13 +435,13 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 	local self_closing = false
 
 	while true do
-		tok = self.tok:next_token()
+		tok = tokenizer_next_token(self.tok)
 
 		if tok == nil then
 			return elem
 		elseif tok.type == "/" then
-			if self.tok:cur_char() == C_GT then
-				self.tok:move()
+			if tokenizer_cur_char(self.tok) == C_GT then
+				tokenizer_move(self.tok)
 				self_closing = true
 			end
 			break
@@ -467,15 +457,15 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 	end
 
 	while true do
-		tok = self.tok:next_token()
+		tok = tokenizer_next_token(self.tok)
 
 		if tok == nil then
 			return elem
 		elseif tok.type == "<" then
-			if self.tok:cur_char() == C_SLASH then
-				self.tok:move()
+			if tokenizer_cur_char(self.tok) == C_SLASH then
+				tokenizer_move(self.tok)
 
-				local end_name = self.tok:next_token()
+				local end_name = tokenizer_next_token(self.tok)
 				if not end_name then
 					self:report_error(
 						"missing_token",
@@ -484,7 +474,7 @@ function PARSER_FUNCS:parse_element(skip_opening_tag)
 					return
 				end
 				if end_name.type == "string" and end_name.value == elem_name then
-					local close_greater = self.tok:next_token()
+					local close_greater = tokenizer_next_token(self.tok)
 					if not close_greater then
 						self:report_error(
 							"missing_token",
@@ -530,7 +520,7 @@ end
 ---@return element[]
 function PARSER_FUNCS:parse_elements()
 	---@cast self parser
-	local tok = self.tok:next_token()
+	local tok = tokenizer_next_token(self.tok)
 	---@type element[]
 	local elems = {}
 	local elems_i = 1
@@ -544,7 +534,7 @@ function PARSER_FUNCS:parse_elements()
 		elems[elems_i] = next_element
 		elems_i = elems_i + 1
 
-		tok = self.tok:next_token()
+		tok = tokenizer_next_token(self.tok)
 	end
 
 	return elems
@@ -686,36 +676,28 @@ function XML_ELEMENT_FUNCS:apply_defaults(defaults)
 	return self
 end
 
----Returns the content inside an element.
----Example:
----```xml
----<Hi>Content</Hi>
----```
----Here `:text()` is "Content"
----@return str
-function XML_ELEMENT_FUNCS:text()
-	---@cast self element
-	if self.content == nil then
-		return ""
+---Append an element's content pieces into a string buffer, inserting a space between two pieces unless either is punctuation
+---@param content str[]
+---@param buffer str[]
+---@param n int current buffer length
+---@return int n new buffer length
+local function append_text(content, buffer, n)
+	local count = #content
+	if count == 0 then
+		return n
 	end
-	local content_count = #self.content
-	if content_count == 0 then
-		return ""
-	end
-
-	local text = self.content[1]
-	for i = 2, content_count do
-		local elem = self.content[i]
-		local prev = self.content[i - 1]
-
-		if is_punctuation(elem) or is_punctuation(prev) then
-			text = text .. elem
-		else
-			text = text .. " " .. elem
+	n = n + 1
+	buffer[n] = content[1]
+	for i = 2, count do
+		local cur = content[i]
+		if not (is_punctuation(cur) or is_punctuation(content[i - 1])) then
+			n = n + 1
+			buffer[n] = " "
 		end
+		n = n + 1
+		buffer[n] = cur
 	end
-
-	return text
+	return n
 end
 
 ---If you want to construct a new element and immediately add it use `:create_child`.
@@ -1066,6 +1048,9 @@ function nxml.parse_many(data)
 	return elems
 end
 
+-- All new elements share one empty errors table. Must not be mutated.
+local EMPTY_ERRORS = {}
+
 ---Constructs an element with the given values, just a wrapper to set the metatable really.
 ---@param name str
 ---@param attrs table<str, any>? {}
@@ -1083,7 +1068,7 @@ function nxml.new_element(name, attrs, children)
 		name = name,
 		attr = attr,
 		children = children or {},
-		errors = {},
+		errors = EMPTY_ERRORS,
 		content = nil,
 	}
 	---@diagnostic disable-next-line: return-type-mismatch
@@ -1093,64 +1078,88 @@ end
 ---@param elem element
 ---@param packed boolean
 ---@param indent_char string
----@param cur_indent string
+---@param indents string[] indent string per depth, built lazily and reused
+---@param depth integer
 ---@param buffer string[]
-local function to_string_internal_experimental_impl(elem, packed, indent_char, cur_indent, buffer)
-	buffer[#buffer + 1] = "<"
-	buffer[#buffer + 1] = elem.name
+---@param n integer current number of entries in `buffer`
+---@return integer n new number of entries in `buffer`
+local function to_string_internal_impl(elem, packed, indent_char, indents, depth, buffer, n)
+	local cur_indent = indents[depth]
+	n = n + 1
+	buffer[n] = "<"
+	n = n + 1
+	buffer[n] = elem.name
 	local self_closing = #elem.children == 0 and (not elem.content or #elem.content == 0)
 
 	local first = true
 	for k, v in pairs(elem.attr) do
 		if not packed or first then
-			buffer[#buffer + 1] = " "
+			n = n + 1
+			buffer[n] = " "
 			first = false
 		end
-		buffer[#buffer + 1] = k
-		buffer[#buffer + 1] = '="'
-		buffer[#buffer + 1] = attr_value_to_str(v)
-		buffer[#buffer + 1] = '"'
+		n = n + 1
+		buffer[n] = k
+		n = n + 1
+		buffer[n] = '="'
+		n = n + 1
+		buffer[n] = attr_value_to_str(v)
+		n = n + 1
+		buffer[n] = '"'
 	end
 
 	if self_closing then
-		if packed then
-			buffer[#buffer + 1] = "/>"
-		else
-			buffer[#buffer + 1] = " />"
-		end
-		return
+		n = n + 1
+		buffer[n] = packed and "/>" or " />"
+		return n
 	end
 
-	buffer[#buffer + 1] = ">"
+	n = n + 1
+	buffer[n] = ">"
 
-	local deeper_indent = cur_indent .. indent_char
+	-- indent cache: build each depth's indent string once, reuse for all siblings
+	local deeper_indent = indents[depth + 1]
+	if not deeper_indent then
+		deeper_indent = cur_indent .. indent_char
+		indents[depth + 1] = deeper_indent
+	end
 
 	if elem.content and #elem.content ~= 0 then
 		if not packed then
-			buffer[#buffer + 1] = "\n"
-			buffer[#buffer + 1] = deeper_indent
+			n = n + 1
+			buffer[n] = "\n"
+			n = n + 1
+			buffer[n] = deeper_indent
 		end
-		buffer[#buffer + 1] = elem:text()
+		n = append_text(elem.content, buffer, n)
 	end
 
 	if not packed then
-		buffer[#buffer + 1] = "\n"
+		n = n + 1
+		buffer[n] = "\n"
 	end
 
 	for _, v in ipairs(elem.children) do
 		if not packed then
-			buffer[#buffer + 1] = deeper_indent
+			n = n + 1
+			buffer[n] = deeper_indent
 		end
-		to_string_internal_experimental_impl(v, packed, indent_char, deeper_indent, buffer)
+		n = to_string_internal_impl(v, packed, indent_char, indents, depth + 1, buffer, n)
 		if not packed then
-			buffer[#buffer + 1] = "\n"
+			n = n + 1
+			buffer[n] = "\n"
 		end
 	end
 
-	buffer[#buffer + 1] = cur_indent
-	buffer[#buffer + 1] = "</"
-	buffer[#buffer + 1] = elem.name
-	buffer[#buffer + 1] = ">"
+	n = n + 1
+	buffer[n] = cur_indent
+	n = n + 1
+	buffer[n] = "</"
+	n = n + 1
+	buffer[n] = elem.name
+	n = n + 1
+	buffer[n] = ">"
+	return n
 end
 
 ---@param elem element
@@ -1158,9 +1167,10 @@ end
 ---@param indent_char string
 ---@param cur_indent string
 ---@return string
-local function to_string_internal_experimental(elem, packed, indent_char, cur_indent)
+local function to_string_internal(elem, packed, indent_char, cur_indent)
 	local buffer = {}
-	to_string_internal_experimental_impl(elem, packed, indent_char, cur_indent, buffer)
+	local indents = { [0] = cur_indent }
+	to_string_internal_impl(elem, packed, indent_char, indents, 0, buffer, 0)
 	return table.concat(buffer)
 end
 
@@ -1174,8 +1184,7 @@ end
 function nxml.tostring(elem, packed, indent_char, cur_indent)
 	indent_char = indent_char or "\t"
 	cur_indent = cur_indent or ""
-	return to_string_internal_experimental(elem, packed or false, indent_char, cur_indent)
-	-- return to_string_internal(elem, packed or false, indent_char, cur_indent)
+	return to_string_internal(elem, packed or false, indent_char, cur_indent)
 end
 
 return nxml
